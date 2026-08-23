@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 语音通话页：深色背景 + 涟漪头像 + 声浪波形 + 挂断（对应 Web 端 VoiceCall.vue） -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/call_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="24dp">
+
+        <!-- 顶部：返回 + 标题 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageButton
+                android:id="@+id/btn_back"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_settings"
+                android:src="@drawable/ic_back" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="10dp"
+                android:text="@string/voice_call_title"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+        </FrameLayout>
+
+        <!-- 中间：涟漪 + 头像 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <View
+                android:id="@+id/ripple_1"
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                android:layout_gravity="center"
+                android:alpha="0"
+                android:background="@drawable/ripple_circle" />
+
+            <View
+                android:id="@+id/ripple_2"
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                android:layout_gravity="center"
+                android:alpha="0"
+                android:background="@drawable/ripple_circle" />
+
+            <View
+                android:id="@+id/ripple_3"
+                android:layout_width="240dp"
+                android:layout_height="240dp"
+                android:layout_gravity="center"
+                android:alpha="0"
+                android:background="@drawable/ripple_circle" />
+
+            <!-- AI 头像（AI_SPEAKING 时由代码驱动缩放动画） -->
+            <FrameLayout
+                android:id="@+id/avatar_container"
+                android:layout_width="150dp"
+                android:layout_height="150dp"
+                android:layout_gravity="center">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/ic_avatar" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="@string/app_name"
+                    android:textColor="@color/white"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <!-- 用户声浪波形（10 条，高度由音频电平驱动） -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="96dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/wave_0"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_1"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_2"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_3"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_4"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_5"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_6"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_7"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_8"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+
+            <View
+                android:id="@+id/wave_9"
+                android:layout_width="5dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="@color/wave_bar" />
+        </LinearLayout>
+
+        <!-- 挂断按钮 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp">
+
+            <ImageButton
+                android:id="@+id/btn_hangup"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_hangup"
+                android:contentDescription="@string/hang_up"
+                android:src="@drawable/ic_hangup" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

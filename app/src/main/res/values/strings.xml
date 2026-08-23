@@ -1,0 +1,43 @@
+<resources>
+    <string name="app_name">HelloXiaoZhi</string>
+    <string name="settings_title">设置</string>
+    <string name="voice_call_title">小智语音通话</string>
+
+    <!-- 主页 -->
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_error">连接错误</string>
+    <string name="input_hint">输入消息…</string>
+    <string name="action_send">发送</string>
+    <string name="action_call">语音通话</string>
+    <string name="action_settings">设置</string>
+
+    <!-- 设置页 -->
+    <string name="settings_ws_url">服务器地址（WebSocket）</string>
+    <string name="settings_ota_url">OTA 注册地址</string>
+    <string name="settings_token_enable">Token 设置</string>
+    <string name="settings_token">Token（开启后连接时携带）</string>
+    <string name="settings_device_id">设备 ID</string>
+    <string name="settings_save">保存</string>
+    <string name="settings_saved">配置已保存</string>
+    <string name="settings_invalid">请检查填写内容是否有效</string>
+
+    <!-- 激活对话框 -->
+    <string name="activation_title">设备激活</string>
+    <string name="activation_hint">请在 xiaozhi.me 网站控制台添加设备，输入下面的验证码</string>
+    <string name="activation_code">验证码</string>
+    <string name="activation_waiting">等待激活中，每 5 秒自动检查一次…</string>
+    <string name="activation_done">已添加设备，立即检查</string>
+    <string name="activation_cancel">取消</string>
+    <string name="activation_activated">设备已激活</string>
+    <string name="activation_error">激活检查失败：%s</string>
+
+    <!-- 语音通话页 -->
+    <string name="hang_up">挂断</string>
+
+    <!-- 权限 -->
+    <string name="permission_record_audio_required">需要录音权限才能进行语音通话</string>
+
+    <!-- 错误提示 -->
+    <string name="error_connect_failed">连接失败：%s</string>
+</resources>

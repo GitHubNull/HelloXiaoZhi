@@ -1,0 +1,150 @@
+# agents.md — HelloXiaoZhi AI 代理上下文文档
+
+> 本文档面向 AI 编程代理与后续开发者，描述 HelloXiaoZhi 的核心业务逻辑、状态机设计、音频处理流程与 WebSocket 通信机制。所有符号名可直接在代码库中定位。
+
+## 1. 项目概览
+
+HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)，逻辑逐行移植自 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui)（仓库内 `ref/xiaozhi-webui-master/` 为参考实现副本）。
+
+- **Android 端**：`app/src/main/java/org/oxff/helloxiaozhi/`（Kotlin，原生 View 体系，非 Compose）
+- **参考 Web 端**：`ref/xiaozhi-webui-master/src/`（Vue3 + TS）与 `ref/xiaozhi-webui-master/backend/`（Python FastAPI 代理）
+- **关键设计原则**：Android 端代码注释中大量标注了「对应 Web 端 Xxx.ts / ref 后端 xxx.py」的对应关系，修改时务必保持行为对齐。
+
+## 2. 模块索引（符号名 → 职责）
+
+| 模块 | 关键符号 | 职责 |
+| --- | --- | --- |
+| 配置 | `AppConfig`（config/） | SharedPreferences 持久化：wsUrl / otaUrl / token / clientId / deviceId；`isOfficialMode()` 判定官方直连 |
+| 编排 | `XiaoZhiController`（controller/） | 核心胶水层：组装 WebSocket、激活流程、录音/播放、状态机；全部 UI 回调在主线程 |
+| WebSocket | `XiaoZhiWebSocket`（net/） | OkHttp WebSocket 客户端：握手头、hello、自动重连（3s） |
+| OTA | `OtaClient`（net/）、`ActivationFlow`（activation/） | HTTP 设备注册；验证码激活轮询（5s） |
+| 状态机 | `ChatStateMachine`（chat/） | 语音通话状态机（详见 §3） |
+| 消息模型 | `Messages.kt`、`ChatModels.kt`（chat/） | 上行/下行 JSON 消息数据类；ChatState/ChatEvent/ChatRole/ConnectionStatus |
+| 音频采集 | `AudioRecorderManager`（audio/） | AudioRecord 采集、成帧（960 采样/60ms）、RMS 电平、44.1k→16k 重采样兜底 |
+| 音频播放 | `AudioPlayer`（audio/） | AudioTrack 播放队列、打断清空、队列播空回调 |
+| Opus 编解码 | `OpusCodec`（audio/）→ `app/src/main/cpp/opus_jni.c` | libopus JNI 封装；编码 16k/单声道/60ms；解码采样率动态 |
+| WAV 解析 | `WavParser`（audio/） | RIFF 魔数检测与解析（WebUI 代理下发的 WAV 分流） |
+| 工具 | `AudioMath`、`DeviceInfoProvider`、`Executors.kt`（util/） | 电平计算、设备 ID（MAC 格式）生成、主线程执行器/静音调度器 |
+| UI | `MainActivity` / `SettingsActivity` / `VoiceCallActivity` / `ActivationDialog`（ui/） | 聊天界面、设置、语音通话、激活对话框 |
+
+## 3. 语音通话状态机（ChatStateMachine）
+
+### 3.1 状态与常量
+
+```kotlin
+enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
+```
+
+常量定义于 `ChatStateMachine.Companion`，阈值与 Web 端 App.vue 配置一致：
+
+| 常量 | 值 | 含义 |
+| --- | --- | --- |
+| `THRESHOLD_SPEAKING` | 0.04f | 判定用户开始说话的电平阈值 |
+| `THRESHOLD_INTERRUPT` | 0.1f | 用户打断 AI 的电平阈值 |
+| `SILENCE_MS` | 1000L | 用户停止说话后进入 AI 回答的静音时长 |
+
+### 3.2 状态转换
+
+- **IDLE**：收到音频帧，电平 > 0.04 → `USER_SPEAKING`（触发帧不发送）
+- **USER_SPEAKING**：每帧上行 Opus；电平 < 0.04 启动静音计时（1s），到期 → `AI_SPEAKING`；恢复说话取消计时
+- **AI_SPEAKING**：电平 > 0.1 → 发送 `AbortMessage`（携带 session_id）→ `USER_SPEAKING`
+
+### 3.3 消息副作用（transition 内触发）
+
+- 进入 `USER_SPEAKING`：发送 `ListenMessage.start()`，触发 `ChatEvent.USER_START_SPEAKING`（→ `AudioPlayer.pausePlayback()` 清空队列）
+- 离开 `USER_SPEAKING`（`exitUserSpeaking()`）：取消静音计时 + 发送 `ListenMessage.stop()` + `ChatEvent.USER_STOP_SPEAKING`
+- 进入 `AI_SPEAKING`：触发 `ChatEvent.AI_START_SPEAKING`（→ `AudioPlayer.resumePlayback()`）
+- 离开 `AI_SPEAKING`：触发 `ChatEvent.AI_STOP_SPEAKING`
+- 状态机外部回退：`AudioPlayer.onQueueEmpty`（队列播空 ≥500ms）→ 若处于 `AI_SPEAKING` 则 `setState(IDLE)`
+
+### 3.4 线程模型
+
+`handleAudioLevel` / `setState` 均通过 `UiExecutor`（主线程 Handler）串行化；`SilenceScheduler` 基于 Handler postDelayed。**禁止**在非主线程直接改状态。单元测试中 `logger` 默认为 no-op（避免 android.util.Log 在 JVM 环境抛异常）。
+
+## 4. 音频处理流程
+
+### 4.1 上行（录音 → 服务器）
+
+```
+AudioRecorderManager.recordLoop()
+  → AudioRecord（优先 16kHz；getMinBufferSize 不支持则 44.1kHz + LinearResampler 转 16kHz）
+  → 每次 read 40ms 数据，切分为 60ms 帧（OpusCodec.FRAME_SIZE = 960）
+  → AudioMath.rmsLevel(frame) 计算电平
+  → ChatStateMachine.handleAudioLevel(level, frame)
+      → USER_SPEAKING 时回调 sendAudioData → OpusCodec.encode → ws.sendOpus（二进制帧）
+```
+
+关键细节：音频源用 `MediaRecorder.AudioSource.MIC` 而非 VOICE_COMMUNICATION（后者在部分设备会把输入当回声全消除，实测电平恒为 0）；AEC 可用时开启，失败静默降级。
+
+### 4.2 下行（服务器 → 播放）
+
+```
+XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
+  → XiaoZhiController.handleAudioFrame（OkHttp 回调线程执行）
+      → WavParser.isWav(data)？
+          RIFF 魔数：WavParser.parse → PCM（WebUI 代理下发，采样率可能变化，同步 player.setSampleRate）
+          否则：OpusCodec.decode(data, sampleRate*60/1000)（16kHz=960，24kHz=1440）
+  → AudioPlayer.enqueue(pcm)
+  → 若状态为 IDLE → setState(AI_SPEAKING)
+```
+
+播放器为单线程消费 `ConcurrentLinkedQueue`；`pausePlayback()` 清空队列并 pause+flush AudioTrack，`resumePlayback()` 恢复；懒创建 AudioTrack（MODE_STREAM，USAGE_MEDIA/CONTENT_TYPE_SPEECH）。
+
+## 5. WebSocket 通信机制
+
+### 5.1 握手（XiaoZhiWebSocket.connect）
+
+请求头：`Device-Id`（MAC 格式）、`Client-Id`（UUID，首次生成持久化）、`Protocol-Version: 1`，token 开启时附加 `Authorization: Bearer <token>`。连接建立（onOpen）后立即发送 `HelloMessage`（type=hello, version=3, transport=websocket, audio_params=opus/16k/1ch/60ms 帧）。
+
+### 5.2 消息类型（Messages.kt，逐字段对齐 ref types/message.ts）
+
+**上行**：
+- `HelloMessage`：握手（音频参数声明）
+- `ListenMessage`：`state=start/stop`，mode=auto；`DetectMessage`：state=detect，文字输入（source=text）
+- `AbortMessage`：打断 TTS，携带 session_id
+
+**下行**（XiaoZhiController.handleTextMessage 分发）：
+- `hello` → 记录 session_id，按服务器 audio_params.sample_rate 重建解码器（handleHello）
+- `stt` → 用户语音识别文本（ChatRole.USER 追加）
+- `llm` → 模型回复文本（ChatRole.AI 追加）
+- `tts` → 状态机：`start` 时若 IDLE 则进入 AI_SPEAKING；`sentence_start` 追加文本（以 `%` 开头的控制文本不展示）
+
+### 5.3 连接生命周期
+
+- `connect()`：已连接时 no-op；`disconnect()`：置 autoReconnect=false 并 close(1000)
+- 断线（onClosed/onFailure）→ 3 秒后自动重连（`RECONNECT_DELAY_MS=3000`）
+- 连接状态枚举 `ConnectionStatus`：CONNECTED / DISCONNECTED / ERROR
+
+## 6. 激活与连接流程（官方直连模式）
+
+1. `XiaoZhiController.ensureConnected()`：官方模式（`AppConfig.isOfficialMode()`）→ `ActivationFlow.ensureActivated()`
+2. `OtaClient.register()` POST OTA 注册（payload 逐字段对齐 websocket_proxy.py，模拟 ESP32 固件信息）
+3. 响应含 `activation.code`（6 位验证码）→ `onActivationCodeRequired` 弹框展示，每 5s 轮询（`POLL_INTERVAL_MS=5000`），用户可点「我已添加设备」立即检查（`requestCheckNow()`）
+4. `activation` 字段消失 → `onActivated` → **必须新建 WebSocket 连接**（官方协议要求）
+5. 自定义模式（非官方 URL）跳过激活直接 `connectWebSocket()`
+
+## 7. 与参考实现的对应关系
+
+| Android 端 | 参考实现 |
+| --- | --- |
+| `ChatStateMachine` | `ref/.../src/services/ChatStateManager.ts` |
+| `XiaoZhiWebSocket` | `ref/.../src/services/WebSocketManager.ts` + `backend/app/proxy/websocket_proxy.py`（服务器侧握手） |
+| `AudioRecorderManager` | Web 端 AudioWorklet + `backend/app/utils/audio.py` |
+| `AudioPlayer` | Web 端 AudioService（`ref/.../src/services/AudioManager.ts`） |
+| `OtaClient` | `backend/app/proxy/websocket_proxy.py` 的 `_update_ota_address()` |
+| `ActivationFlow` | 官方固件 `kDeviceStateActivating → kDeviceStateIdle` 阶段 |
+| `XiaoZhiController` | Web 端 `App.vue` 的组装逻辑 + 后端代理职责 |
+
+## 8. 测试与构建
+
+- **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`。运行：`gradlew testDebugUnitTest`
+- **仪器化测试**（`app/src/androidTest/`）：`AudioRecordProbeInstrumentedTest`、`OpusCodecInstrumentedTest`。运行需真机/模拟器
+- **构建**：`gradlew assembleDebug`；原生库由 CMake 编译（`app/src/main/cpp/CMakeLists.txt`），ABI：arm64-v8a / armeabi-v7a / x86_64 / x86
+- **构建约束**：OkHttp 锁定 4.12.0（最后一个支持 API 21 的版本，勿升级）；targetSdk 27 且 lint 禁用 `ExpiredTargetSdkVersion`（兼容旧设备）；Java/Kotlin target 11
+
+## 9. 常见改动提示
+
+- 改动协议消息字段：同步修改 `Messages.kt` 与 `ref/xiaozhi-webui-master/src/types/message.ts`
+- 改动状态机逻辑：必须更新 `ChatStateMachineTest` 中对应的转换用例
+- 改动音频参数（采样率/帧长）：`AudioParams`（hello）、`OpusCodec.FRAME_SIZE`、`AudioRecorderManager` 成帧逻辑需同步
+- 真机排障：Logcat 过滤 `XiaoZhiController`（连接/消息）、`AudioRecorder`（电平帧）、`XiaoZhiWebSocket`（WS 生命周期）、`[SM]` 前缀（状态迁移）
