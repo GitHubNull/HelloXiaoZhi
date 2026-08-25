@@ -30,14 +30,16 @@ class MessagesTest {
     }
 
     @Test
-    fun `listen start 与 stop 消息`() {
-        val start = JsonParser.parseString(gson.toJson(ListenMessage.start())).asJsonObject
+    fun `listen start 与 stop 消息携带 session_id`() {
+        val start = JsonParser.parseString(gson.toJson(ListenMessage.start("s-1"))).asJsonObject
         assertEquals("listen", start.get("type").asString)
         assertEquals("start", start.get("state").asString)
         assertEquals("auto", start.get("mode").asString)
+        assertEquals("s-1", start.get("session_id").asString)
 
-        val stop = JsonParser.parseString(gson.toJson(ListenMessage.stop())).asJsonObject
+        val stop = JsonParser.parseString(gson.toJson(ListenMessage.stop("s-1"))).asJsonObject
         assertEquals("stop", stop.get("state").asString)
+        assertEquals("s-1", stop.get("session_id").asString)
     }
 
     @Test

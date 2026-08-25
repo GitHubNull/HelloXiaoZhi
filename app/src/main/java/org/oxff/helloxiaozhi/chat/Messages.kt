@@ -36,15 +36,16 @@ data class HelloMessage(
     @SerializedName("audio_params") val audioParams: AudioParams = AudioParams(),
 )
 
-/** 开始/停止监听消息 */
+/** 开始/停止监听消息（session_id 对齐 ESP32 protocol.cc SendStartListening/SendStopListening） */
 data class ListenMessage(
     val type: String = "listen",
     val state: String,
     val mode: String = "auto",
+    @SerializedName("session_id") val sessionId: String,
 ) {
     companion object {
-        fun start() = ListenMessage(state = "start")
-        fun stop() = ListenMessage(state = "stop")
+        fun start(sessionId: String) = ListenMessage(state = "start", sessionId = sessionId)
+        fun stop(sessionId: String) = ListenMessage(state = "stop", sessionId = sessionId)
     }
 }
 

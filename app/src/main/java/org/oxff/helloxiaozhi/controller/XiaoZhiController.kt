@@ -1,6 +1,7 @@
 package org.oxff.helloxiaozhi.controller
 
 import android.content.Context
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -55,6 +56,7 @@ class XiaoZhiController(appContext: Context) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val gson = Gson()
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val okHttp = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -70,6 +72,8 @@ class XiaoZhiController(appContext: Context) {
     private var opusDecoder: OpusCodec? = null
     private var decodeSampleRate = 16000
     private var audioFrameCount = 0
+    private var firstAudioFrameAt = 0L
+    private var lastAudioFrameAt = 0L
 
     private val stateMachine = ChatStateMachine(
         HandlerExecutor(mainHandler),
@@ -89,8 +93,10 @@ class XiaoZhiController(appContext: Context) {
                 when (event) {
                     // 用户开口：停止播放并清空队列（对应 App.vue USER_START_SPEAKING）
                     ChatEvent.USER_START_SPEAKING -> player.pausePlayback()
-                    // AI 开始说话：恢复播放（对应 App.vue AI_START_SPEAKING）
-                    ChatEvent.AI_START_SPEAKING -> player.resumePlayback()
+                    // AI 开始说话：延迟恢复播放（避免服务器端 VAD 把 TTS 开头误判为用户语音）
+                    ChatEvent.AI_START_SPEAKING -> mainHandler.postDelayed({
+                        player.resumePlayback()
+                    }, TTS_PLAY_DELAY_MS)
                     else -> Unit
                 }
             }
@@ -142,6 +148,9 @@ class XiaoZhiController(appContext: Context) {
             mainHandler.post {
                 sessionId = ""
                 setConnectionStatus(ConnectionStatus.DISCONNECTED)
+                // WebSocket 断开后重置状态机状态：避免重连后状态机状态与实际不符，
+                // 导致无法正常工作（如重连后状态机仍认为在 AI_SPEAKING，无法响应用户语音）
+                resetStateMachine()
             }
         }
 
@@ -259,6 +268,7 @@ class XiaoZhiController(appContext: Context) {
             onError = { message ->
                 mainHandler.post { onError?.invoke(message) }
             },
+            audioManager = audioManager,
         ).also { it.start() }
     }
 
@@ -301,12 +311,14 @@ class XiaoZhiController(appContext: Context) {
             "stt" -> {
                 val message = gson.fromJson(json, SttMessage::class.java)
                 message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    Log.i(TAG, "[WS] stt text=「$it」")
                     appendChat(ChatRole.USER, it)
                 }
             }
             "llm" -> {
                 val message = gson.fromJson(json, LlmMessage::class.java)
                 message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    Log.i(TAG, "[WS] llm text=「$it」")
                     appendChat(ChatRole.AI, it)
                 }
             }
@@ -344,11 +356,35 @@ class XiaoZhiController(appContext: Context) {
                 val text = tts.text?.trim().orEmpty()
                 // 以 % 开头的控制文本不展示（对应 App.vue blackList）
                 if (text.isNotEmpty() && !text.startsWith("%")) {
+                    Log.i(TAG, "[WS] tts sentence=「$text」")
                     appendChat(ChatRole.AI, text)
                 }
             }
+            TtsMessage.STATE_STOP -> {
+                // 服务器结束本次 TTS：尾音帧可能还在路上，延迟一小段
+                // 若队列已播空则立即回 IDLE，无需等播放器超时
+                mainHandler.postDelayed({
+                    if (stateMachine.state == ChatState.AI_SPEAKING && player.isQueueEmpty()) {
+                        stateMachine.setState(ChatState.IDLE)
+                    }
+                }, TTS_STOP_GRACE_MS)
+            }
             else -> Unit
         }
+    }
+
+    /**
+     * 延迟播放 TTS 音频帧：listen stop 后服务器端 VAD 仍处理缓冲的音频帧，
+     * 若立即播放 TTS，服务器会把 TTS 开头误判为用户语音（如"对啦"被识别为"对"）。
+     * 延迟 200ms 可让服务器端 VAD 有足够时间处理完用户语音，避免自问自答。
+     */
+    private fun scheduleAudioFrame(pcm: ShortArray) {
+        mainHandler.postDelayed({
+            player.enqueue(pcm)
+            if (stateMachine.state == ChatState.IDLE) {
+                stateMachine.setState(ChatState.AI_SPEAKING)
+            }
+        }, TTS_PLAY_DELAY_MS)
     }
 
     /**
@@ -359,9 +395,18 @@ class XiaoZhiController(appContext: Context) {
     private fun handleAudioFrame(data: ByteArray) {
         if (data.size < 8) return
         audioFrameCount++
-        if (audioFrameCount == 1 || audioFrameCount % 50 == 0) {
-            Log.i(TAG, "[WS] audio frame #$audioFrameCount (${data.size}B)")
+        val now = System.currentTimeMillis()
+        if (audioFrameCount == 1) {
+            firstAudioFrameAt = now
+            Log.i(TAG, "[WS] audio frame #1 (${data.size}B), tts start")
+        } else {
+            val gap = now - lastAudioFrameAt
+            if (audioFrameCount % 50 == 0 || gap > 200) {
+                val total = now - firstAudioFrameAt
+                Log.i(TAG, "[WS] audio frame #$audioFrameCount (${data.size}B), gap=${gap}ms, total=${total}ms")
+            }
         }
+        lastAudioFrameAt = now
         val pcm = if (WavParser.isWav(data)) {
             val parsed = WavParser.parse(data) ?: return
             // 代理下发的 WAV 采样率可能变化（固定 16kHz），保持播放器同步
@@ -375,12 +420,7 @@ class XiaoZhiController(appContext: Context) {
             opusDecoder?.decode(data, decodeSampleRate * 60 / 1000) ?: return
         }
         if (pcm.isEmpty()) return
-        player.enqueue(pcm)
-        mainHandler.post {
-            if (stateMachine.state == ChatState.IDLE) {
-                stateMachine.setState(ChatState.AI_SPEAKING)
-            }
-        }
+        scheduleAudioFrame(pcm)
     }
 
     // ---------------- 辅助 ----------------
@@ -400,8 +440,19 @@ class XiaoZhiController(appContext: Context) {
         onConnectionStatusChanged?.invoke(status)
     }
 
+    /** 重置状态机状态（WebSocket 断开时调用，避免重连后状态机状态与实际不符） */
+    private fun resetStateMachine() {
+        stateMachine.reset()
+    }
+
     private companion object {
         const val TAG = "XiaoZhiController"
         const val DEFAULT_SAMPLE_RATE = 16000
+
+        /** tts stop 后等待尾音帧入队的宽限期 */
+        const val TTS_STOP_GRACE_MS = 800L
+
+        /** listen stop 后延迟播放 TTS 的时间（避免服务器端 VAD 误判） */
+        const val TTS_PLAY_DELAY_MS = 1500L
     }
 }

@@ -3,6 +3,7 @@ package org.oxff.helloxiaozhi.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.Build
 import android.util.Log
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -68,6 +69,12 @@ class AudioPlayer {
     fun enqueue(pcm: ShortArray) {
         if (!active || pcm.isEmpty()) return
         queue.add(pcm)
+        enqueueCount++
+        val size = queue.size
+        // 诊断：每 50 帧或队列堆积时打印；每帧都打日志会拖慢 WS 接收线程
+        if (enqueueCount % 50 == 0 || size >= 3) {
+            Log.i(TAG, "enqueue: #$enqueueCount, queue=$size, pcm=${pcm.size} samples")
+        }
         synchronized(lock) { lock.notifyAll() }
     }
 
@@ -76,6 +83,16 @@ class AudioPlayer {
         Log.i(TAG, "resumePlayback: playing=true, queue=${queue.size}")
         playing = true
         lastWriteAt = System.currentTimeMillis()
+        // pausePlayback() 已调用 track.pause()；必须显式 play() 恢复，
+        // 否则播放线程写入 paused track 的数据被缓冲但不出声，
+        // 表现为「只有第一轮 AI 回答有声音，之后一直静音」
+        track?.let {
+            try {
+                it.play()
+            } catch (_: Exception) {
+                // 状态异常：交由播放线程在 write 失败时重建 track
+            }
+        }
         synchronized(lock) { lock.notifyAll() }
     }
 
@@ -95,38 +112,57 @@ class AudioPlayer {
         synchronized(lock) { lock.notifyAll() }
     }
 
+    /** 播放队列是否已空（供 Controller 在 tts stop 时判断可否提前回 IDLE） */
+    fun isQueueEmpty(): Boolean = queue.isEmpty()
+
     @Volatile
     private var lastWriteAt = 0L
+
+    /** 入队帧计数（诊断用，不重置） */
+    private var enqueueCount = 0
 
     private fun playbackLoop() {
         var t: AudioTrack? = null
         while (active) {
-            val chunk = queue.poll()
-            if (chunk != null) {
-                if (playing) {
-                    if (t == null) {
-                        // 懒创建：首次需要播放时才占用音频输出资源
-                        t = ensureTrack() ?: break
-                        try {
-                            t.play()
-                        } catch (_: Exception) {
-                            break
-                        }
-                    }
-                    try {
-                        t.write(chunk, 0, chunk.size)
-                        lastWriteAt = System.currentTimeMillis()
-                    } catch (_: Exception) {
-                        break
-                    }
+            if (!playing) {
+                // 非播放阶段：等待状态变更（不取出帧，让帧在队列中缓存）
+                synchronized(lock) {
+                    if (active) lock.wait(POLL_WAIT_MS)
                 }
-                // 非播放阶段直接丢弃（用户正在说话）
+                continue
+            }
+            if (t == null) {
+                // 懒创建：首次需要播放时才占用音频输出资源
+                t = ensureTrack() ?: break
+            }
+            // 先 peek 不 poll：写入成功才移除，失败时可原帧重试
+            val chunk = queue.peek()
+            if (chunk != null) {
+                if (writeChunkBlocking(t, chunk)) {
+                    queue.poll()
+                    lastWriteAt = System.currentTimeMillis()
+                    // 每 10 帧打印一次播放进度
+                    if (queue.size % 10 == 0) {
+                        Log.i(TAG, "playback: queue=${queue.size}")
+                    }
+                } else {
+                    // AudioTrack 已死（underrun 禁用或非法状态）：重建后重试同一帧
+                    Log.w(TAG, "AudioTrack dead, recreate (queue=${queue.size})")
+                    t = recreateTrack(t)
+                    if (t == null) break
+                }
             } else {
-                // 队列空：超过 500ms 没有新数据则视为播放结束
+                // 队列空：超过超时时间没有新数据则视为播放结束
                 if (playing && System.currentTimeMillis() - lastWriteAt > EMPTY_TIMEOUT_MS) {
                     Log.i(TAG, "queue empty > ${EMPTY_TIMEOUT_MS}ms, onQueueEmpty")
                     playing = false
                     onQueueEmpty?.invoke()
+                } else if (playing && queue.isEmpty()) {
+                    // 播放中但队列空：记录欠载预警
+                    val idleMs = System.currentTimeMillis() - lastWriteAt
+                    if (idleMs > 100 && idleMs % 500 < POLL_WAIT_MS) {
+                        Log.w(TAG, "queue underrun: idle=${idleMs}ms")
+                    }
                 }
                 synchronized(lock) {
                     if (active) lock.wait(POLL_WAIT_MS)
@@ -141,6 +177,36 @@ class AudioPlayer {
         }
     }
 
+    /**
+     * 阻塞写入一帧 PCM；返回 false 表示 AudioTrack 已死亡需要重建。
+     *
+     * 参考官方 ESP32 实现（application.cc OutputAudio）：收到音频帧立即
+     * 解码并写入输出设备，不等待攒 buffer。服务器逐句发送音频（gap 5-7s），
+     * 若等攒够 jitter buffer 再播放会导致严重延迟。
+     *
+     * 阻塞式 write 在 AudioTrack 因 underrun 被系统禁用后可能抛出异常，
+     * 由调用方重建 track。
+     */
+    private fun writeChunkBlocking(t: AudioTrack, chunk: ShortArray): Boolean {
+        return try {
+            t.write(chunk, 0, chunk.size)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** 释放死亡的 AudioTrack 并重建 */
+    private fun recreateTrack(dead: AudioTrack?): AudioTrack? {
+        try {
+            dead?.release()
+        } catch (_: Exception) {
+            // 忽略
+        }
+        track = null
+        return ensureTrack()
+    }
+
     private fun ensureTrack(): AudioTrack? {
         track?.let { if (it.state == AudioTrack.STATE_INITIALIZED) return it }
         releaseTrack()
@@ -151,27 +217,47 @@ class AudioPlayer {
         )
         if (minBuf <= 0) return null
         val bufferSize = maxOf(minBuf * 2, sampleRate * 4)
-        // minSdk 21，AudioAttributes/AudioFormat.Builder 可用
+        val attributes = AudioAttributes.Builder()
+            // 通话通路：与录音端 VOICE_COMMUNICATION + MODE_IN_COMMUNICATION 配合，
+            // 硬件 AEC 才能拿到下行参考信号消除回声；MEDIA 通路会导致 AEC 失效
+            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+        val format = AudioFormat.Builder()
+            .setSampleRate(sampleRate)
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .build()
         val newTrack = try {
-            AudioTrack(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build(),
-                AudioFormat.Builder()
-                    .setSampleRate(sampleRate)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build(),
-                bufferSize,
-                AudioTrack.MODE_STREAM,
-                0, // session id 由系统分配
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                AudioTrack.Builder()
+                    .setAudioAttributes(attributes)
+                    .setAudioFormat(format)
+                    .setBufferSizeInBytes(bufferSize)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    // 放弃低延迟 fast track：实测部分设备 fast track 实际缓冲远小于
+                    // 请求值（2 秒缓冲 0.6 秒即 underrun），写入稍有抖动声音就断续；
+                    // 普通通路下请求缓冲才真实生效
+                    .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_NONE)
+                    .build()
+            } else {
+                // minSdk 21，AudioAttributes/AudioFormat.Builder 可用
+                AudioTrack(attributes, format, bufferSize, AudioTrack.MODE_STREAM, 0)
+            }
         } catch (_: Exception) {
             null
         }
         if (newTrack?.state != AudioTrack.STATE_INITIALIZED) {
             newTrack?.release()
+            return null
+        }
+        // MODE_STREAM 必须显式 start 才会消耗写入的数据；否则 write 阻塞但无声
+        try {
+            newTrack.play()
+            Log.i(TAG, "AudioTrack started: sampleRate=$sampleRate, buffer=$bufferSize")
+        } catch (e: Exception) {
+            Log.e(TAG, "AudioTrack play failed", e)
+            newTrack.release()
             return null
         }
         track = newTrack
@@ -192,7 +278,7 @@ class AudioPlayer {
     private companion object {
         const val TAG = "AudioPlayer"
         const val DEFAULT_SAMPLE_RATE = 16000
-        const val EMPTY_TIMEOUT_MS = 500L
-        const val POLL_WAIT_MS = 50L
+        const val EMPTY_TIMEOUT_MS = 8000L
+        const val POLL_WAIT_MS = 40L
     }
 }

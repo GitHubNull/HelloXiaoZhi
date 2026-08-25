@@ -1,8 +1,10 @@
+![HelloXiaoZhi Banner](img/readme_banner.png)
+
 # HelloXiaoZhi
 
-> 基于 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 协议的 Android 端「小智」AI 语音助手客户端，配套 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 参考实现（WebUI + WebSocket 代理后端）。本项目仅供学习交流使用。
+> 基于 [xiaozhi](https://github.com/78/xiaozhi) 协议的 Android 端「小智」AI 语音助手客户端，配套 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 参考实现（WebUI + WebSocket 代理后端）。本项目仅供学习交流使用。
 
-HelloXiaoZhi 是一个运行在 Android 手机上的小智语音助手客户端：像微信一样和小智文字聊天，也能直接语音对话，支持随时打断。项目在无硬件（如 ESP32 开发板）的条件下体验小智的完整对话链路——OTA 设备注册、WebSocket 长连接、Opus 音频编解码、语音打断与状态机切换。
+HelloXiaoZhi 是一个运行在 Android 手机上的小智语音助手客户端：像微信一样和小智文字聊天，也能直接语音对话，支持随时打断。项目在无硬件的条件下体验小智的完整对话链路——OTA 设备注册、WebSocket 长连接、Opus 音频编解码、语音打断与状态机切换。
 
 ## 功能特性
 
@@ -205,4 +207,4 @@ minSdk 21（Android 5.0）起，兼容armeabi-v7a / arm64-v8a / x86 / x86_64 四
 
 本项目基于 MIT 许可证开源，详见 [LICENSE](LICENSE)。使用本项目前请阅读 [DISCLAIMER.md](DISCLAIMER.md) 中的免责声明。
 
-感谢 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)、[xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 等开源项目的协议参考与实现启发。
+感谢 [xiaozhi](https://github.com/78/xiaozhi)、[xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 等开源项目的协议参考与实现启发。
