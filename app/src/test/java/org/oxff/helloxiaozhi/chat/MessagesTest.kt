@@ -19,8 +19,10 @@ class MessagesTest {
     fun `hello 握手消息字段与协议一致`() {
         val json = JsonParser.parseString(gson.toJson(HelloMessage())).asJsonObject
         assertEquals("hello", json.get("type").asString)
-        assertEquals(3, json.get("version").asInt)
         assertEquals("websocket", json.get("transport").asString)
+        // version=1 + response_mode=manual 与官方/自建代理服务器不兼容（会话无响应），必须保持 version=3
+        assertEquals(3, json.get("version").asInt)
+        assertEquals(null, json.get("response_mode"))
 
         val audio = json.getAsJsonObject("audio_params")
         assertEquals("opus", audio.get("format").asString)

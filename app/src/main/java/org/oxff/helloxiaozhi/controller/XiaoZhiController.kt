@@ -28,6 +28,7 @@ import org.oxff.helloxiaozhi.chat.ChatStateMachine
 import org.oxff.helloxiaozhi.chat.ConnectionStatus
 import org.oxff.helloxiaozhi.chat.DetectMessage
 import org.oxff.helloxiaozhi.chat.HelloResponse
+import org.oxff.helloxiaozhi.chat.ListenMessage
 import org.oxff.helloxiaozhi.chat.LlmMessage
 import org.oxff.helloxiaozhi.chat.SttMessage
 import org.oxff.helloxiaozhi.chat.TtsMessage
@@ -86,6 +87,13 @@ class XiaoZhiController(
     private var firstAudioFrameAt = 0L
     private var lastAudioFrameAt = 0L
 
+    /**
+     * AI 是否正在播放（对应参考 APP 的 o.f215p 逻辑）。
+     * true 时完全停止上行音频，避免 TTS 泄漏污染服务器端 VAD。
+     */
+    @Volatile
+    private var isAiPlaying = false
+
     private val stateMachine = ChatStateMachine(
         HandlerExecutor(mainHandler),
         HandlerSilenceScheduler(mainHandler),
@@ -108,6 +116,15 @@ class XiaoZhiController(
                     ChatEvent.AI_START_SPEAKING -> mainHandler.postDelayed({
                         player.resumePlayback()
                     }, TTS_PLAY_DELAY_MS)
+                    // AI 本轮播放结束（队列已播空）：官方服务器在 tts stop 后不会自动继续监听，
+                    // 通话中必须重发 listen start 开启新一轮监听（真机实测：不重发则只有第一轮被识别，
+                    // 后续语音要等挂断时的 listen stop 才被一次性识别）。对齐 ESP32 固件/参考 APP：
+                    // 每轮回复结束后重新 StartListening
+                    ChatEvent.AI_STOP_SPEAKING -> {
+                        if (recorder != null && connectionStatus == ConnectionStatus.CONNECTED) {
+                            ws.sendText(ListenMessage.start(sessionId))
+                        }
+                    }
                     else -> Unit
                 }
             }
@@ -197,6 +214,7 @@ class XiaoZhiController(
         // 播放队列播空 → 回到 IDLE（对应 Web 端 onQueueEmpty）
         player.onQueueEmpty = {
             mainHandler.post {
+                isAiPlaying = false
                 if (stateMachine.state == ChatState.AI_SPEAKING) {
                     stateMachine.setState(ChatState.IDLE)
                 }
@@ -325,16 +343,19 @@ class XiaoZhiController(
         if (stateMachine.state != ChatState.IDLE) {
             stateMachine.setState(ChatState.IDLE)
         }
-        val encoder = opusEncoder ?: OpusCodec.encoder().also { created ->
-            opusEncoder = created
-            // Opus 编码器冷启动预热：编码器仅在 USER_SPEAKING 时才编码，
-            // 通话首句是创建后的首次编码，SILK 模式前几帧质量未收敛，
-            // 导致首句句首字符识别丢失（真机日志：「我想了解一下…」
-            // 只识别到「想了解一下」）。预编码静音帧让编码器收敛，丢弃结果。
-            warmupEncoder(created)
-        }
+        // 主动发送 listen start（mode=auto）：服务器收到后才开始处理上行音频。
+        // 对齐参考 APP auto 模式——按下通话按钮时即发 listen start（I0.k B1.o.J()），
+        // 整个通话期间保持一次监听，不随状态迁移重复发送。
+        ws.sendText(ListenMessage.start(sessionId))
+        // 参考 APP 无编码器预热：Opus audio() 模式直接可用
+        val encoder = opusEncoder ?: OpusCodec.encoder().also { opusEncoder = it }
         recorder = AudioRecorderManager(
-            onFrame = { frame, level -> stateMachine.handleAudioLevel(level, frame) },
+            onFrame = { frame, level ->
+                // AI 播放时完全不上行（参考 APP 的 !o.f215p 逻辑）
+                if (!isAiPlaying) {
+                    stateMachine.handleAudioLevel(level, frame)
+                }
+            },
             onError = { message ->
                 mainHandler.post { onError?.invoke(message) }
             },
@@ -345,21 +366,12 @@ class XiaoZhiController(
     /** 退出语音通话（对应 App.vue closeVoiceCallPanel） */
     fun stopVoiceCall() {
         ws.sendText(AbortMessage(sessionId = sessionId))
+        // 结束监听（与 startVoiceCall 的 listen start 配对）
+        ws.sendText(ListenMessage.stop(sessionId))
         recorder?.stop()
         recorder = null
         player.pausePlayback()
         stateMachine.reset()
-    }
-
-    /** 编码器预热：编码若干帧静音并丢弃，使 SILK 模式状态收敛 */
-    private fun warmupEncoder(encoder: OpusCodec) {
-        val silence = ShortArray(OpusCodec.FRAME_SIZE)
-        try {
-            repeat(20) { encoder.encode(silence) }
-            Log.i(TAG, "opus encoder warmed up")
-        } catch (e: Exception) {
-            Log.w(TAG, "opus encoder warmup failed: ${e.message}")
-        }
     }
 
     private fun stopVoiceCallIfActive() {
@@ -413,13 +425,11 @@ class XiaoZhiController(
                     Log.i(TAG, "[WS] stt text=「$it」")
                     appendChat(botAtParse, ChatRole.USER, it)
                 }
-                // 服务器端 VAD 先于客户端结束识别：首条 stt 到达时若客户端仍在
-                // USER_SPEAKING，说明句子已说完，立即收尾（发 listen stop + 停止上行）。
-                // 真机日志证实继续上行尾部帧（静音+呼吸/口噪）会被服务器识别为
-                // 第二句幻觉词（如真实句后紧跟「嗯。」「对。」）
+                // 服务器端 VAD 检测到用户说话：若客户端在 IDLE，进入 USER_SPEAKING
+                // （对齐参考 APP auto 模式：服务器端 VAD 驱动状态机）
                 mainHandler.post {
-                    if (stateMachine.state == ChatState.USER_SPEAKING) {
-                        stateMachine.setState(ChatState.AI_SPEAKING)
+                    if (stateMachine.state == ChatState.IDLE) {
+                        stateMachine.setState(ChatState.USER_SPEAKING)
                     }
                 }
             }
@@ -447,6 +457,10 @@ class XiaoZhiController(
             opusDecoder = OpusCodec.decoder(rate)
             player.setSampleRate(rate)
         }
+        // 通话中断线重连：用新 session 重发 listen start，恢复服务器监听（否则重连后语音静默失效）
+        if (recorder != null) {
+            ws.sendText(ListenMessage.start(sessionId))
+        }
     }
 
     /** TTS 状态消息（对应 App.vue tts 分支） */
@@ -455,7 +469,8 @@ class XiaoZhiController(
         when (tts.state) {
             TtsMessage.STATE_START -> {
                 mainHandler.post {
-                    if (stateMachine.state == ChatState.IDLE) {
+                    isAiPlaying = true
+                    if (stateMachine.state == ChatState.IDLE || stateMachine.state == ChatState.USER_SPEAKING) {
                         stateMachine.setState(ChatState.AI_SPEAKING)
                     }
                 }
@@ -472,6 +487,7 @@ class XiaoZhiController(
                 // 服务器结束本次 TTS：尾音帧可能还在路上，延迟一小段
                 // 若队列已播空则立即回 IDLE，无需等播放器超时
                 mainHandler.postDelayed({
+                    isAiPlaying = false
                     if (stateMachine.state == ChatState.AI_SPEAKING && player.isQueueEmpty()) {
                         stateMachine.setState(ChatState.IDLE)
                     }
@@ -484,7 +500,7 @@ class XiaoZhiController(
     /**
      * 延迟播放 TTS 音频帧：listen stop 后服务器端 VAD 仍处理缓冲的音频帧，
      * 若立即播放 TTS，服务器会把 TTS 开头误判为用户语音（如"对啦"被识别为"对"）。
-     * 延迟 200ms 可让服务器端 VAD 有足够时间处理完用户语音，避免自问自答。
+     * 延迟 300ms 可让服务器端 VAD 有足够时间处理完用户语音，避免自问自答。
      */
     private fun scheduleAudioFrame(pcm: ShortArray) {
         mainHandler.postDelayed({
@@ -564,6 +580,6 @@ class XiaoZhiController(
         const val TTS_STOP_GRACE_MS = 800L
 
         /** listen stop 后延迟播放 TTS 的时间（避免服务器端 VAD 误判） */
-        const val TTS_PLAY_DELAY_MS = 1500L
+        const val TTS_PLAY_DELAY_MS = 300L
     }
 }

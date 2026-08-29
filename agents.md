@@ -33,35 +33,30 @@ HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 
 
 ## 3. 语音通话状态机（ChatStateMachine）
 
-### 3.1 状态与常量
+### 3.1 状态与常量（服务器端 VAD 驱动，对齐参考 APP auto 模式）
 
 ```kotlin
 enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 ```
 
-常量定义于 `ChatStateMachine.Companion`，阈值与 Web 端 App.vue 配置一致：
+无客户端 VAD 阈值：`THRESHOLD_SPEAKING` / `THRESHOLD_INTERRUPT` / `SILENCE_MS` 均已移除，用户开口/停说由服务器端 VAD 通过 `stt` / `tts` 消息通知客户端。关键延迟常量在 `XiaoZhiController.Companion`：`TTS_PLAY_DELAY_MS=300L`（AI 开始播放延迟，避免服务器端 VAD 把 TTS 开头误判为用户语音）、`TTS_STOP_GRACE_MS=800L`（tts stop 后等尾音帧的宽限期）。
 
-| 常量 | 值 | 含义 |
-| --- | --- | --- |
-| `THRESHOLD_SPEAKING` | 0.02f | 判定用户开始说话的电平阈值（句首轻声优化后下调） |
-| `THRESHOLD_INTERRUPT` | 0.1f | 用户打断 AI 的电平阈值 |
-| `SILENCE_MS` | 1000L | 用户停止说话后进入 AI 回答的静音时长 |
+状态机的 `onStateChanged: ((ChatState) -> Unit)?` 钩子在 `transition()` 末尾触发；通话页的星河双球动画由它驱动（`XiaoZhiController` 转发给 `onChatStateChanged`）。
 
-状态机新增 `onStateChanged: ((ChatState) -> Unit)?` 钩子，在 `transition()` 末尾触发；通话页的星河双球动画由它驱动（`XiaoZhiController` 转发给 `onChatStateChanged`）。
+### 3.2 状态转换（由服务器消息驱动）
 
-### 3.2 状态转换
+- **IDLE**：所有音频帧直接上行（服务器端 VAD 检测），收到服务器 `stt` → `USER_SPEAKING`
+- **USER_SPEAKING**：每帧上行 Opus + 电平驱动声浪 UI；服务器 `tts start` → `AI_SPEAKING`
+- **AI_SPEAKING**：完全不上行（`XiaoZhiController.isAiPlaying` 门控，对齐参考 APP `!o.f215p`），避免 TTS 泄漏污染服务器端 VAD；`tts stop` 宽限期后队列已播空 → `IDLE`
 
-- **IDLE**：收到音频帧，电平 > 0.02 → `USER_SPEAKING`（触发帧不发送）
-- **USER_SPEAKING**：每帧上行 Opus；电平 < 0.02 启动静音计时（1s），到期 → `AI_SPEAKING`；恢复说话取消计时
-- **AI_SPEAKING**：帧不上行但缓存进预触发缓冲（16 帧）；电平 > 0.1 连续 3 帧 → 发送 `AbortMessage`（携带 session_id）→ `USER_SPEAKING`，打断时补发缓冲帧保证句首完整；另外收到服务器 `stt` 时若仍在 `USER_SPEAKING` 会立即收尾（发 listen stop 停上行），避免尾部噪声被识别为幻觉词
+### 3.3 消息副作用与 listen 生命周期（真机回归教训）
 
-### 3.3 消息副作用（transition 内触发）
-
-- 进入 `USER_SPEAKING`：发送 `ListenMessage.start()`，触发 `ChatEvent.USER_START_SPEAKING`（→ `AudioPlayer.pausePlayback()` 清空队列）
-- 离开 `USER_SPEAKING`（`exitUserSpeaking()`）：取消静音计时 + 发送 `ListenMessage.stop()` + `ChatEvent.USER_STOP_SPEAKING`
-- 进入 `AI_SPEAKING`：触发 `ChatEvent.AI_START_SPEAKING`（→ `AudioPlayer.resumePlayback()`）
+- listen start/stop **不由状态迁移发送**：`startVoiceCall()` 主动发 `ListenMessage.start`（mode=auto），`stopVoiceCall()` 发 `ListenMessage.stop`；断线重连后 `handleHello` 检测到通话中（recorder 非空）用新 session 重发 listen start。**每轮回复播完后必须重发 listen start**（`ChatEvent.AI_STOP_SPEAKING` 且通话中）：官方服务器在 tts stop 后不会自动继续监听，不重发则只有第一轮被识别，后续语音要等挂断时的 listen stop 才被一次性识别（真机实测）。若等收到 `stt` 才发 listen start 会形成死锁；中途重发会重置服务器监听；`version=1 + response_mode="manual"`（参考 APP 对接的第三方服务器协议）与官方/自建代理不兼容，已回退 `version=3`
+- 进入 `USER_SPEAKING`：触发 `ChatEvent.USER_START_SPEAKING`（→ `AudioPlayer.pausePlayback()` 清空队列）
+- 离开 `USER_SPEAKING`：`ChatEvent.USER_STOP_SPEAKING`
+- 进入 `AI_SPEAKING`：触发 `ChatEvent.AI_START_SPEAKING`（→ 延迟 300ms `AudioPlayer.resumePlayback()`）
 - 离开 `AI_SPEAKING`：触发 `ChatEvent.AI_STOP_SPEAKING`
-- 状态机外部回退：`AudioPlayer.onQueueEmpty`（队列播空 ≥500ms）→ 若处于 `AI_SPEAKING` 则 `setState(IDLE)`
+- 状态机外部回退：`AudioPlayer.onQueueEmpty`（队列播空 ≥500ms）或 `tts stop` 宽限期到期 → 若处于 `AI_SPEAKING` 则 `setState(IDLE)`
 
 ### 3.4 线程模型
 
@@ -75,9 +70,10 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 AudioRecorderManager.recordLoop()
   → AudioRecord（优先 16kHz；getMinBufferSize 不支持则 44.1kHz + LinearResampler 转 16kHz）
   → 每次 read 40ms 数据，切分为 60ms 帧（OpusCodec.FRAME_SIZE = 960）
-  → AudioMath.rmsLevel(frame) 计算电平
+  → AudioMath.rmsLevel(frame) 计算电平（仅驱动声浪 UI，无客户端 VAD）
+  → isAiPlaying 门控（AI 播放时完全不上行）
   → ChatStateMachine.handleAudioLevel(level, frame)
-      → USER_SPEAKING 时回调 sendAudioData → OpusCodec.encode → ws.sendOpus（二进制帧）
+      → IDLE / USER_SPEAKING 时回调 sendAudioData → OpusCodec.encode → ws.sendOpus（二进制帧）
 ```
 
 关键细节：音频源用 `MediaRecorder.AudioSource.MIC` 而非 VOICE_COMMUNICATION（后者在部分设备会把输入当回声全消除，实测电平恒为 0）；AEC 可用时开启，失败静默降级。

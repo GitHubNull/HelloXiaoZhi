@@ -28,9 +28,11 @@ object ChineseSoftnessSuite {
                 chineseSpeech("你好", initialSoftness = softness)
                 expectStt("你好")
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("softness")
             })
         }
@@ -41,9 +43,9 @@ object ChineseSoftnessSuite {
             chineseSpeech("今天天气怎么样", initialSoftness = 0.4f)
             expectStt("今天天气怎么样")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             withTag("softness")
         })
 
@@ -52,9 +54,9 @@ object ChineseSoftnessSuite {
             chineseSpeech("我想问一下", initialSoftness = 0.35f)
             expectStt("我想问一下")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             withTag("softness")
         })
 
@@ -64,9 +66,9 @@ object ChineseSoftnessSuite {
             chineseSpeech("爸爸妈妈在吗", initialSoftness = 0.45f)
             expectStt("爸爸妈妈在吗")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             withTag("softness")
         })
     }

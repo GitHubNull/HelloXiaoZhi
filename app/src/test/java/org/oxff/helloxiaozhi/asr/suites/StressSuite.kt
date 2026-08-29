@@ -22,9 +22,11 @@ object StressSuite {
                 chineseSpeech("这是连续对话压力测试的第${round}轮内容", initialSoftness = 1.0f)
                 expectStt("这是连续对话压力测试的第${round}轮内容")
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("stress")
             })
         }
@@ -37,9 +39,11 @@ object StressSuite {
                 chineseSpeech(phrase, initialSoftness = 0.9f)
                 expectStt(phrase)
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("stress")
                 withTag("short")
             })
@@ -51,9 +55,9 @@ object StressSuite {
             chineseSpeech("网络有点慢你还能听到吗", initialSoftness = 1.0f)
             expectStt("网络有点慢你还能听到吗")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             timeout(15000)
             withTag("stress")
             withTag("responseDelay:1500")

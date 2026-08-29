@@ -116,7 +116,7 @@ class MockAsrServerTest {
         client.sendHello()
         client.sendListenStart()
         repeat(10) { client.sendAudioFrame(8000) }
-        client.sendListenStop()
+        // 服务器端 VAD：收到首帧后 100ms 自动发送 STT（无需 listen stop）
 
         val stt = client.waitForMessageContaining("\"type\":\"stt\"")
         assertTrue(stt.contains("今天天气怎么样"))
@@ -132,7 +132,9 @@ class MockAsrServerTest {
         client.sendHello()
         client.sendListenStart()
         repeat(5) { client.sendAudioFrame(4000) }
-        client.sendListenStop()
+        // 服务器端 VAD：收到首帧后 100ms 自动发送 STT 并落盘说话段
+        // 等待 VAD 触发 + 所有帧到达服务器
+        Thread.sleep(300)
         server.awaitStt()
 
         val stats = server.getAudioStats()
@@ -149,8 +151,8 @@ class MockAsrServerTest {
         client.sendHello()
         client.sendListenStart()
         client.sendAudioFrame(8000)
-        client.sendListenStop()
-        server.awaitStt()
+        // 服务器端 VAD：收到首帧后 100ms 触发，但 NoSttResponse 配置不发送 STT
+        Thread.sleep(300)
 
         assertTrue("不应收到 stt 消息",
             client.messages.none { it.contains("\"type\":\"stt\"") })
@@ -163,8 +165,7 @@ class MockAsrServerTest {
         client.sendHello()
         client.sendListenStart()
         client.sendAudioFrame(8000)
-        client.sendListenStop()
-        server.awaitStt()
+        // 服务器端 VAD：收到首帧后 100ms 触发，ErrorJson 配置发送错误 JSON
 
         assertNotNull(client.waitForMessageContaining("\"type\":\"error\""))
     }
@@ -180,7 +181,7 @@ class MockAsrServerTest {
         client.sendHello()
         client.sendListenStart()
         repeat(8) { client.sendAudioFrame(8000) }
-        client.sendListenStop()
+        // 服务器端 VAD：收到首帧后 100ms 自动发送 STT（无需 listen stop）
 
         val stt = client.waitForMessageContaining("\"type\":\"stt\"")
         assertTrue("应命中指纹映射（实际: $stt）", stt.contains("映射文本"))

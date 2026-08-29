@@ -106,6 +106,9 @@ class AsrTestRunner(
         @Volatile var receivedStt: String? = null
             private set
 
+        /** 状态机引用（由 runScenario 注入，用于服务器消息驱动状态迁移） */
+        @Volatile var stateMachine: ChatStateMachine? = null
+
         val downlinkMessages = ConcurrentLinkedQueue<DownlinkMessage>()
 
         fun connect(): Boolean {
@@ -136,6 +139,21 @@ class AsrTestRunner(
                             receivedStt = msgText
                             sttReceivedNano = System.nanoTime()
                             sttLatch.countDown()
+                            // 服务器端 VAD 驱动：收到 STT → 进入 USER_SPEAKING
+                            stateMachine?.setState(ChatState.USER_SPEAKING)
+                        }
+                        "tts" -> {
+                            val state = parsed?.get("state") as? String
+                            when (state) {
+                                "start" -> {
+                                    // 服务器端 VAD 驱动：收到 TTS start → 进入 AI_SPEAKING
+                                    stateMachine?.setState(ChatState.AI_SPEAKING)
+                                }
+                                "stop" -> {
+                                    // 服务器端 VAD 驱动：收到 TTS stop → 回到 IDLE
+                                    stateMachine?.setState(ChatState.IDLE)
+                                }
+                            }
                         }
                     }
                 }
@@ -148,7 +166,8 @@ class AsrTestRunner(
             // 对齐生产链路（XiaoZhiWebSocket.onOpen 后立即发 HelloMessage）；
             // OkHttp 会在握手完成后自动按序发出此消息
             webSocket?.send(gson.toJson(mapOf(
-                "type" to "hello", "version" to 3, "transport" to "websocket",
+                "type" to "hello", "version" to 1, "transport" to "websocket",
+                "response_mode" to "manual",
                 "audio_params" to mapOf(
                     "format" to "opus", "sample_rate" to 16000,
                     "channels" to 1, "frame_duration" to 60
@@ -206,21 +225,17 @@ class AsrTestRunner(
 
         val scheduler = VirtualSilenceScheduler()
         val machine = ChatStateMachine(DirectExecutor(), scheduler, harness)
+        harness.stateMachine = machine
 
         // 记录实际状态迁移（虚拟时间戳）
-        val actualTransitions = mutableListOf<StateTransition>()
+        // 线程安全：onStateChanged 在 WebSocket 回调线程触发，评估在主线程进行
+        val actualTransitions = java.util.concurrent.CopyOnWriteArrayList<StateTransition>()
         var previousState = ChatState.IDLE
 
-        // 打断场景：先置为 AI_SPEAKING 模拟 AI 正在说话（需在挂状态钩子前，
-        // 避免把测试预置迁移记录为实际迁移）
-        if ("interrupt" in scenario.tags) {
-            machine.setState(ChatState.AI_SPEAKING)
-            previousState = ChatState.AI_SPEAKING
-        }
-
+        // 服务器端 VAD 驱动：状态迁移由服务器消息触发，而非客户端电平检测
         machine.onStateChanged = { newState ->
             actualTransitions.add(
-                StateTransition(previousState, newState, Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, scheduler.clockMs)
+                StateTransition(previousState, newState, Trigger.SERVER_VAD, scheduler.clockMs)
             )
             previousState = newState
         }
@@ -238,7 +253,7 @@ class AsrTestRunner(
             scheduler.advanceTo(scheduler.clockMs + FRAME_MS)
             frame = source.readFrame()
         }
-        // 输入结束后补静音帧，驱动静音检测收尾（状态机 5 帧防抖 + 1000ms 计时）
+        // 输入结束后补静音帧，驱动服务器端 VAD 检测用户停止说话
         val silentFrame = ShortArray(FRAME_SIZE)
         repeat(TRAILING_SILENCE_FRAMES) {
             machine.handleAudioLevel(0f, silentFrame)
@@ -247,21 +262,12 @@ class AsrTestRunner(
         harness.lastAudioEndNano = System.nanoTime()
         val feedElapsedNano = System.nanoTime() - startNano
 
-        // 已退出 USER_SPEAKING 则 listen stop 必然已发出（异步传输中）：
-        // 轮询等它到达服务器后再等 STT 响应，避免 responseDelay 场景误判为未触发
-        val exitedSpeaking = actualTransitions.any { it.from == ChatState.USER_SPEAKING }
-        if (exitedSpeaking) {
-            val stopDeadline = System.currentTimeMillis() + 2000
-            while (server.lastMessageOfType(MockAsrServer.MessageType.LISTEN_STOP) == null &&
-                System.currentTimeMillis() < stopDeadline
-            ) {
-                Thread.sleep(10)
-            }
-            harness.sttLatch.await(scenario.timeoutMs, TimeUnit.MILLISECONDS)
-        } else {
-            // 未触发说话时无 listen stop，短等确认无响应即可
-            Thread.sleep(300)
-        }
+        // 等待服务器端 VAD 检测完成（STT + TTS 序列发送完毕）
+        // 服务器收到首个音频帧后自动开始说话段，延迟 responseDelayMs 后发送 STT
+        harness.sttLatch.await(scenario.timeoutMs, TimeUnit.MILLISECONDS)
+        // sttLatch 在 STT 消息处理中 countDown，但 TTS start/stop 消息可能还在队列中；
+        // 短暂等待确保所有下行消息处理完毕（状态迁移完成）
+        Thread.sleep(200)
 
         // ---- 汇总评估 ----
         val hypothesis = harness.receivedStt ?: ""

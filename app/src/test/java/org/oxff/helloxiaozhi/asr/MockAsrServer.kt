@@ -141,6 +141,15 @@ class MockAsrServer(private val port: Int = 0) {
         errorConfig.set(config)
     }
 
+    /** 主动发送 STT 消息（服务器端 VAD 检测到用户说话） */
+    fun sendStt(text: String) {
+        clientSocket?.let { ws ->
+            ws.send(gson.toJson(mapOf(
+                "type" to "stt", "text" to text, "session_id" to sessionId
+            )))
+        }
+    }
+
     // ---------------- 观测接口 ----------------
 
     /** 获取服务器收到的所有消息（按时间顺序） */
@@ -154,7 +163,10 @@ class MockAsrServer(private val port: Int = 0) {
 
     /** 获取服务器收到的音频帧统计 */
     fun getAudioStats(): AudioStats {
-        val frames = segments.flatMap { it.frames }
+        // 从 receivedMessages 中获取所有 AUDIO_FRAME（包括未落盘的当前说话段）
+        val frames = receivedMessages
+            .filter { it.type == MessageType.AUDIO_FRAME }
+            .mapNotNull { it.audioFrame }
         val totalBytes = frames.sumOf { it.size * 2L }
         val avgSize = if (frames.isEmpty()) 0 else totalBytes.toInt() / frames.size
 
@@ -231,6 +243,57 @@ class MockAsrServer(private val port: Int = 0) {
             synchronized(currentFrames) {
                 currentFrames.add(frame)
             }
+            // 服务器端 VAD：收到首个音频帧时自动开始说话段（对齐参考 APP auto 模式）
+            // 延迟 responseDelayMs（或默认 100ms）后发送 STT + TTS 序列
+            if (segmentStartTime == 0L) {
+                segmentStartTime = System.currentTimeMillis()
+                val delay = if (responseDelayMs > 0) responseDelayMs else 100L
+                Thread {
+                    try {
+                        Thread.sleep(delay)
+                        when (val config = errorConfig.get()) {
+                            is ErrorConfig.NoSttResponse -> Unit
+                            is ErrorConfig.ErrorJson -> webSocket.send(config.json)
+                            else -> {
+                                val sttText = resolveStt(AudioFingerprint.fromFrames(
+                                    synchronized(currentFrames) { currentFrames.toList() }
+                                ))
+                                if (sttText != null) {
+                                    // 落盘说话段（服务器端 VAD 检测到用户说话）
+                                    val frames = synchronized(currentFrames) {
+                                        val copy = currentFrames.toList()
+                                        currentFrames.clear()
+                                        copy
+                                    }
+                                    val latch = CountDownLatch(1)
+                                    sttLatch.set(latch)
+                                    segments.add(ReceivedSegment(
+                                        frames, AudioFingerprint.fromFrames(frames),
+                                        sttText, segmentStartTime, System.currentTimeMillis()
+                                    ))
+                                    // 对齐真实服务器时序：stt → tts start → sentence_start → stop
+                                    webSocket.send(gson.toJson(mapOf(
+                                        "type" to "stt", "text" to sttText, "session_id" to sessionId
+                                    )))
+                                    webSocket.send(gson.toJson(mapOf(
+                                        "type" to "tts", "state" to "start", "session_id" to sessionId
+                                    )))
+                                    webSocket.send(gson.toJson(mapOf(
+                                        "type" to "tts", "state" to "sentence_start",
+                                        "text" to "好的，我听到了：$sttText", "session_id" to sessionId
+                                    )))
+                                    webSocket.send(gson.toJson(mapOf(
+                                        "type" to "tts", "state" to "stop", "session_id" to sessionId
+                                    )))
+                                    latch.countDown()
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // 连接已关闭或线程中断
+                    }
+                }.apply { isDaemon = true }.start()
+            }
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -265,9 +328,8 @@ class MockAsrServer(private val port: Int = 0) {
             }
             else -> Unit
         }
-        // 不清空已收到的帧：客户端先补发预触发缓冲帧、再发 listen start，
-        // 这些帧属于本说话段的句首音频（对齐真实服务器连续音频流语义）
-        segmentStartTime = System.currentTimeMillis()
+        // 服务器端 VAD 架构：listen start 只是协议消息，不影响 VAD 检测
+        // 说话段由 onMessage(bytes) 中的 VAD 模拟自动开始
     }
 
     private fun handleListenStop(webSocket: WebSocket) {
@@ -286,37 +348,10 @@ class MockAsrServer(private val port: Int = 0) {
 
         val sttText = resolveStt(fingerprint)
         segments.add(ReceivedSegment(frames, fingerprint, sttText, segmentStartTime, stopTime))
-
-        val delay = responseDelayMs
-        Thread {
-            try {
-                if (delay > 0) Thread.sleep(delay)
-                when (val config = errorConfig.get()) {
-                    is ErrorConfig.NoSttResponse -> Unit
-                    is ErrorConfig.ErrorJson -> webSocket.send(config.json)
-                    else -> {
-                        if (sttText != null) {
-                            // 对齐真实服务器时序：stt → tts start → sentence_start → stop
-                            webSocket.send(gson.toJson(mapOf(
-                                "type" to "stt", "text" to sttText, "session_id" to sessionId
-                            )))
-                            webSocket.send(gson.toJson(mapOf(
-                                "type" to "tts", "state" to "start", "session_id" to sessionId
-                            )))
-                            webSocket.send(gson.toJson(mapOf(
-                                "type" to "tts", "state" to "sentence_start",
-                                "text" to "好的，我听到了：$sttText", "session_id" to sessionId
-                            )))
-                            webSocket.send(gson.toJson(mapOf(
-                                "type" to "tts", "state" to "stop", "session_id" to sessionId
-                            )))
-                        }
-                    }
-                }
-            } finally {
-                latch.countDown()
-            }
-        }.apply { isDaemon = true }.start()
+        // 服务器端 VAD 架构：STT 由 onMessage(bytes) 中的 VAD 模拟发送，
+        // handleListenStop 只负责落盘说话段，不再发送 STT/TTS（避免循环触发）
+        segmentStartTime = 0L
+        latch.countDown()
     }
 
     /** 按指纹匹配预设文本；未命中时使用默认响应 */

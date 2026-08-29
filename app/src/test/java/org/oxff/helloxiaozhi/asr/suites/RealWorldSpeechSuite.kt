@@ -55,9 +55,11 @@ object RealWorldSpeechSuite {
                 )
                 expectStt(case.expected_text)
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("real_world")
                 case.tags.forEach { withTag(it) }
             }

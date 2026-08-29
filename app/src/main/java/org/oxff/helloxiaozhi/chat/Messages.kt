@@ -28,7 +28,12 @@ data class AudioParams(
     @SerializedName("frame_duration") val frameDuration: Int = 60,
 )
 
-/** 连接建立后的握手消息（version 3 与 Web 端保持一致） */
+/**
+ * 连接建立后的握手消息（version 3，对齐 ref 前端 WebSocketManager.ts）。
+ *
+ * 注意：曾尝试 version=1 + response_mode="manual"（参考 APP 对接的第三方服务器协议），
+ * 实测官方/自建代理服务器不识别该组合，会导致整个会话不响应（文字 detect 与音频均无回复）。
+ */
 data class HelloMessage(
     val type: String = "hello",
     val version: Int = 3,

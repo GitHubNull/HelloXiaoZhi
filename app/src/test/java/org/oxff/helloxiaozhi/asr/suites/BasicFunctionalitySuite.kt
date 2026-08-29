@@ -18,9 +18,11 @@ object BasicFunctionalitySuite {
             chineseSpeech("今天天气怎么样", initialSoftness = 1.0f)
             expectStt("今天天气怎么样")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
+            expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                Trigger.SERVER_TTS_STOP, 2000)
             withTag("basic")
         },
 
@@ -30,9 +32,11 @@ object BasicFunctionalitySuite {
             chineseSpeech("你好小智", initialSoftness = 0.4f)
             expectStt("你好小智")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
+            expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                Trigger.SERVER_TTS_STOP, 2000)
             withTag("basic")
             withTag("softness")
         },
@@ -43,9 +47,11 @@ object BasicFunctionalitySuite {
             chineseSpeech("你好", initialSoftness = 0.8f)
             expectStt("你好")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
+            expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                Trigger.SERVER_TTS_STOP, 2000)
             withTag("basic")
         },
 
@@ -58,9 +64,11 @@ object BasicFunctionalitySuite {
             )
             expectStt("我想了解一下你们这里有没有什么适合周末出去玩的地方可以推荐给我")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
+            expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                Trigger.SERVER_TTS_STOP, 2000)
             timeout(60000)
             withTag("basic")
             withTag("long")

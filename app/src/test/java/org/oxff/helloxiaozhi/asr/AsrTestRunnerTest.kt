@@ -98,7 +98,7 @@ class AsrTestRunnerTest {
             chineseSpeech("你猜怎么着", initialSoftness = 0.05f)
             expectStt("你猜怎么着")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
         }
         val report = runner.runScenario(soft)
 
@@ -117,9 +117,11 @@ class AsrTestRunnerTest {
             chineseSpeech("你好", initialSoftness = 1.0f)
             expectStt("你好")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
+            expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                Trigger.SERVER_TTS_STOP, 2000)
             withTag("responseDelay:800")
         }
         val report = runner.runScenario(delayed)

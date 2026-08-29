@@ -4,6 +4,26 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-08-30
+
+### Changed
+
+- 语音通话状态机重构为**服务器端 VAD 驱动**（对齐参考 APP auto 模式）：移除客户端 VAD 阈值检测（`THRESHOLD_SPEAKING`/`THRESHOLD_INTERRUPT`）、预触发缓冲（`PRE_ROLL_*`）与客户端打断检测，状态由服务器消息驱动（`stt` → `USER_SPEAKING`、`tts start` → `AI_SPEAKING`）
+- `listen start/stop` 改为通话生命周期管理：`startVoiceCall` 时发送一次 `listen start`（mode=auto 整个通话保持监听），`stopVoiceCall` 时发送 `listen stop`，不再随状态迁移重复发送（修复真机死锁：服务器等 listen start 才处理音频，旧逻辑等 stt 才发 listen start）
+- AI 播放时完全不上行：新增 `isAiPlaying` 标志，TTS 播放期间丢弃所有上行音频帧（避免 TTS 泄漏污染服务器端 VAD）
+- 每轮 AI 回复结束（`AI_STOP_SPEAKING`）后重发 `listen start`：修复「只有第一轮被识别，后续语音要等挂断才被一次性识别」
+- 通话中断线重连后（`handleHello`）重发 `listen start`：修复重连后语音静默失效
+- `TTS_PLAY_DELAY_MS` 由 1500ms 收紧至 300ms；移除 Opus 编码器冷启动预热（参考 APP 无此逻辑）
+
+### Fixed
+
+- 修复多轮对话失效：AI 播放结束后未重新开启服务器监听，后续语音需等挂断时才被一次性识别
+- 修复重连后语音静默：新 session 建立后未恢复服务器监听
+
+### Docs
+
+- `HelloMessage` 注释补充 `version=1 + response_mode=manual` 组合不被官方/自建代理服务器识别的教训；`agents.md` 状态机文档同步更新；ASR 测试体系（`MockAsrServer`、`AsrTestRunner`、各套件）对齐服务器 VAD 驱动模型
+
 ## [0.3.3] - 2026-08-29
 
 ### Fixed

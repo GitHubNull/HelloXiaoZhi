@@ -1,15 +1,20 @@
 package org.oxff.helloxiaozhi.chat
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.oxff.helloxiaozhi.util.DirectExecutor
 import org.oxff.helloxiaozhi.util.SilenceScheduler
 
 /**
- * ChatStateMachine 状态迁移单元测试：
- * 阈值触发、静音计时、打断、listen/abort 消息副作用。
+ * ChatStateMachine 状态迁移单元测试（对齐参考 APP auto 模式：服务器端 VAD 驱动）。
+ *
+ * 测试范围：
+ *  - IDLE / USER_SPEAKING 状态直接发送音频帧（无客户端 VAD 阈值检测）
+ *  - AI_SPEAKING 状态完全不上行（由 XiaoZhiController 的 isAiPlaying 控制）
+ *  - 状态迁移消息副作用（仅 ChatEvent；listen start/stop 由通话生命周期管理）
+ *  - onStateChanged 钩子
+ *
  * 使用 DirectExecutor + 可控 FakeSilenceScheduler，无需 Android 运行时。
  */
 class ChatStateMachineTest {
@@ -73,76 +78,31 @@ class ChatStateMachineTest {
 
     private fun frame(level: Float) = ShortArray(960)
 
-    // ---------------- 状态迁移 ----------------
+    // ---------------- IDLE 状态（服务器端 VAD 检测） ----------------
 
     @Test
-    fun `IDLE 电平超阈值进入 USER_SPEAKING 并发送 listen start`() {
+    fun `IDLE 状态直接发送所有音频帧（无客户端 VAD 阈值检测）`() {
         createMachine()
-        // 需要连续 4 帧超过阈值才触发（防抖机制）
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        assertEquals(ChatState.IDLE, machine.state) // 第 1 帧，未触发
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        assertEquals(ChatState.IDLE, machine.state) // 第 2 帧，未触发
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        assertEquals(ChatState.IDLE, machine.state) // 第 3 帧，未触发
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        assertEquals(ChatState.USER_SPEAKING, machine.state) // 第 4 帧，触发
-        // 触发时先补发预触发缓冲帧（4 帧），再发 listen start
-        assertEquals(4, callbacks.audioFrames.size)
-        assertEquals(1, callbacks.textMessages.size)
-        val listen = callbacks.textMessages[0] as ListenMessage
-        assertEquals("start", listen.state)
-        assertEquals(SESSION_ID, listen.sessionId)
-        assertTrue(callbacks.events.contains(ChatEvent.USER_START_SPEAKING))
-    }
-
-    @Test
-    fun `IDLE 期间音频帧进入预触发缓冲 触发时按序补发`() {
-        createMachine()
-        // 先送入 2 帧低电平（不触发），再送入 4 帧高电平触发
+        // IDLE 状态：直接发送所有帧（服务器端 VAD 检测用户说话）
         machine.handleAudioLevel(0.01f, frame(0.01f))
-        machine.handleAudioLevel(0.01f, frame(0.01f))
-        assertTrue(callbacks.audioFrames.isEmpty()) // IDLE 不直接发送
-        repeat(4) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
-        assertEquals(ChatState.USER_SPEAKING, machine.state)
-        // 补发帧数 = 2 帧低电平 + 4 帧高电平 = 6 帧
-        assertEquals(6, callbacks.audioFrames.size)
-        // 补发完成后缓冲清空，后续帧正常逐帧发送
+        machine.handleAudioLevel(0.05f, frame(0.05f))
         machine.handleAudioLevel(0.3f, frame(0.3f))
-        assertEquals(7, callbacks.audioFrames.size)
-    }
-
-    @Test
-    fun `预触发缓冲容量上限 超出时丢弃最旧帧`() {
-        createMachine()
-        // 送入超过容量的低电平帧，缓冲应只保留最近 PRE_ROLL_FRAMES 帧
-        repeat(ChatStateMachine.PRE_ROLL_FRAMES + 4) { machine.handleAudioLevel(0.01f, frame(0.01f)) }
-        assertTrue(callbacks.audioFrames.isEmpty())
-        repeat(4) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
-        assertEquals(ChatState.USER_SPEAKING, machine.state)
-        // 超过容量的帧进入缓冲，只保留最近 PRE_ROLL_FRAMES 帧
-        assertEquals(ChatStateMachine.PRE_ROLL_FRAMES, callbacks.audioFrames.size)
-    }
-
-    @Test
-    fun `IDLE 电平低于阈值保持 IDLE 不发送消息`() {
-        createMachine()
-        machine.handleAudioLevel(0.03f, frame(0.03f))
+        assertEquals(3, callbacks.audioFrames.size)
         assertEquals(ChatState.IDLE, machine.state)
+    }
+
+    @Test
+    fun `IDLE 状态不发送 listen start（等待服务器端 VAD 触发）`() {
+        createMachine()
+        machine.handleAudioLevel(0.05f, frame(0.05f))
         assertTrue(callbacks.textMessages.isEmpty())
-    }
-
-    @Test
-    fun `IDLE 电平恰好等于阈值不触发`() {
-        createMachine()
-        machine.handleAudioLevel(ChatStateMachine.THRESHOLD_SPEAKING, frame(0.04f))
         assertEquals(ChatState.IDLE, machine.state)
     }
 
-    // ---------------- USER_SPEAKING 音频帧与静音计时 ----------------
+    // ---------------- USER_SPEAKING 状态 ----------------
 
     @Test
-    fun `USER_SPEAKING 期间持续发送音频帧`() {
+    fun `USER_SPEAKING 状态持续发送音频帧`() {
         createMachine()
         machine.setState(ChatState.USER_SPEAKING)
         machine.handleAudioLevel(0.3f, frame(0.3f))
@@ -152,161 +112,83 @@ class ChatStateMachineTest {
     }
 
     @Test
-    fun `listen stop 消息携带 session_id`() {
+    fun `进入 USER_SPEAKING 不发送 listen start 只触发事件`() {
         createMachine()
         machine.setState(ChatState.USER_SPEAKING)
-        machine.setState(ChatState.IDLE)
-        val stop = callbacks.textMessages.filterIsInstance<ListenMessage>().last()
-        assertEquals("stop", stop.state)
-        assertEquals(SESSION_ID, stop.sessionId)
+        // listen start 由 XiaoZhiController.startVoiceCall 发送，状态迁移不重复发送（避免重置服务器监听）
+        assertTrue(callbacks.textMessages.filterIsInstance<ListenMessage>().isEmpty())
+        assertTrue(callbacks.events.contains(ChatEvent.USER_START_SPEAKING))
     }
 
     @Test
-    fun `静音启动计时 到期后进入 AI_SPEAKING 并发送 listen stop`() {
+    fun `离开 USER_SPEAKING 不发送 listen stop 只触发事件`() {
         createMachine()
         machine.setState(ChatState.USER_SPEAKING)
-        // 需要连续 5 帧低于阈值才启动计时（防抖机制）
-        repeat(4) {
-            machine.handleAudioLevel(0.01f, frame(0.01f))
-            assertEquals(0, scheduler.scheduleCount) // 前 4 帧未触发
-        }
-        machine.handleAudioLevel(0.01f, frame(0.01f)) // 第 5 帧触发
-        assertEquals(1, scheduler.scheduleCount)
-        scheduler.trigger()
-        assertEquals(ChatState.AI_SPEAKING, machine.state)
-        val stop = callbacks.textMessages.last() as ListenMessage
-        assertEquals("stop", stop.state)
+        machine.setState(ChatState.IDLE)
+        // listen stop 由 XiaoZhiController.stopVoiceCall 发送
+        assertTrue(callbacks.textMessages.filterIsInstance<ListenMessage>().isEmpty())
         assertTrue(callbacks.events.contains(ChatEvent.USER_STOP_SPEAKING))
+    }
+
+    // ---------------- AI_SPEAKING 状态 ----------------
+
+    @Test
+    fun `AI_SPEAKING 状态完全不上行音频帧`() {
+        createMachine()
+        machine.setState(ChatState.AI_SPEAKING)
+        machine.handleAudioLevel(0.05f, frame(0.05f))
+        machine.handleAudioLevel(0.2f, frame(0.2f))
+        assertEquals(0, callbacks.audioFrames.size)
+        assertEquals(ChatState.AI_SPEAKING, machine.state)
+    }
+
+    @Test
+    fun `进入 AI_SPEAKING 触发 AI_START_SPEAKING 事件`() {
+        createMachine()
+        machine.setState(ChatState.AI_SPEAKING)
         assertTrue(callbacks.events.contains(ChatEvent.AI_START_SPEAKING))
     }
 
     @Test
-    fun `恢复说话取消静音计时 保持 USER_SPEAKING`() {
-        createMachine()
-        machine.setState(ChatState.USER_SPEAKING)
-        // 连续 5 帧静音触发计时
-        repeat(5) { machine.handleAudioLevel(0.01f, frame(0.01f)) }
-        assertEquals(1, scheduler.scheduleCount)
-        machine.handleAudioLevel(0.3f, frame(0.3f))   // 说话 → 取消计时
-        assertTrue(scheduler.cancelCount >= 1)
-        assertNull(scheduler.scheduled)
-        scheduler.trigger() // 假任务已取消，不应有任何效果
-        assertEquals(ChatState.USER_SPEAKING, machine.state)
-    }
-
-    @Test
-    fun `静音期间重复静音帧不重复启动计时`() {
-        createMachine()
-        machine.setState(ChatState.USER_SPEAKING)
-        // 连续 5 帧触发计时
-        repeat(5) { machine.handleAudioLevel(0.01f, frame(0.01f)) }
-        assertEquals(1, scheduler.scheduleCount)
-        // 继续静音帧不重复触发
-        repeat(3) { machine.handleAudioLevel(0.01f, frame(0.01f)) }
-        assertEquals(1, scheduler.scheduleCount)
-    }
-
-    // ---------------- AI_SPEAKING 打断 ----------------
-
-    @Test
-    fun `AI_SPEAKING 电平超打断阈值发送 abort 转 USER_SPEAKING`() {
+    fun `离开 AI_SPEAKING 触发 AI_STOP_SPEAKING 事件`() {
         createMachine()
         machine.setState(ChatState.AI_SPEAKING)
-        // 需要连续 3 帧超过打断阈值才触发（防抖机制）
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        assertEquals(ChatState.AI_SPEAKING, machine.state) // 第 1 帧，未触发
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        assertEquals(ChatState.AI_SPEAKING, machine.state) // 第 2 帧，未触发
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        assertEquals(ChatState.USER_SPEAKING, machine.state) // 第 3 帧，触发
-        // 打断时先发 abort，随后进入 USER_SPEAKING 再发 listen start
-        val abort = callbacks.textMessages.filterIsInstance<AbortMessage>().last()
-        assertEquals(SESSION_ID, abort.sessionId)
-        // AI_SPEAKING 期间帧缓存进预触发缓冲，打断时补发缓存帧（3 帧）+ 后续帧，
-        // 保证打断句首完整（不丢打断确认期 + onset 前导帧）
-        assertEquals(3, callbacks.audioFrames.size)
-        // listen start 携带 session_id
-        val listen = callbacks.textMessages.filterIsInstance<ListenMessage>().last()
-        assertEquals("start", listen.state)
-        assertEquals(SESSION_ID, listen.sessionId)
-    }
-
-    @Test
-    fun `AI_SPEAKING 期间音频帧不发送给服务器`() {
-        createMachine()
-        // 先进入 USER_SPEAKING
-        repeat(4) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
-        assertEquals(ChatState.USER_SPEAKING, machine.state)
-        
-        // 进入 AI_SPEAKING
-        machine.setState(ChatState.AI_SPEAKING)
-        assertEquals(ChatState.AI_SPEAKING, machine.state)
-        
-        // 清空之前的发送记录
-        callbacks.audioFrames.clear()
-        
-        // AI_SPEAKING期间发送音频帧
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        
-        // 验证没有音频帧被发送
-        assertEquals(0, callbacks.audioFrames.size)
-    }
-
-    @Test
-    fun `打断 AI 时补发预触发缓冲帧 保证打断句首完整`() {
-        createMachine()
-        machine.setState(ChatState.AI_SPEAKING)
-        // 先送超过容量的低电平帧（AI 正常说话），再送 3 帧高电平触发打断
-        repeat(ChatStateMachine.PRE_ROLL_INTERRUPT_FRAMES + 2) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
-        repeat(3) { machine.handleAudioLevel(0.2f, frame(0.2f)) }
-        assertEquals(ChatState.USER_SPEAKING, machine.state)
-        // 缓冲容量上限为 PRE_ROLL_INTERRUPT_FRAMES，打断时补发最近 16 帧（含 3 帧打断确认）
-        assertEquals(ChatStateMachine.PRE_ROLL_INTERRUPT_FRAMES, callbacks.audioFrames.size)
-        // 进入 USER_SPEAKING 后续帧正常逐帧发送，缓冲已清空不重复补发
-        machine.handleAudioLevel(0.3f, frame(0.3f))
-        assertEquals(ChatStateMachine.PRE_ROLL_INTERRUPT_FRAMES + 1, callbacks.audioFrames.size)
-    }
-
-    @Test
-    fun `AI_SPEAKING 瞬时高电平不触发打断`() {
-        createMachine()
-        machine.setState(ChatState.AI_SPEAKING)
-        // 单帧高电平（回声尖峰）不应触发打断
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        assertEquals(ChatState.AI_SPEAKING, machine.state)
-        assertTrue(callbacks.textMessages.none { it is AbortMessage })
-        // 连续 2 帧后恢复低电平，计数器重置
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        machine.handleAudioLevel(0.2f, frame(0.2f))
-        assertEquals(ChatState.AI_SPEAKING, machine.state)
-        assertTrue(callbacks.textMessages.none { it is AbortMessage })
-    }
-
-    @Test
-    fun `AI_SPEAKING 低电平保持状态`() {
-        createMachine()
-        machine.setState(ChatState.AI_SPEAKING)
-        machine.handleAudioLevel(0.05f, frame(0.05f))
-        assertEquals(ChatState.AI_SPEAKING, machine.state)
-        assertTrue(callbacks.textMessages.none { it is AbortMessage })
-    }
-
-    // ---------------- 显式状态切换 ----------------
-
-    @Test
-    fun `退出 USER_SPEAKING 发送 listen stop 并取消计时`() {
-        createMachine()
-        machine.setState(ChatState.USER_SPEAKING)
-        // 连续 5 帧静音触发计时
-        repeat(5) { machine.handleAudioLevel(0.01f, frame(0.01f)) }
-        assertEquals(1, scheduler.scheduleCount)
         machine.setState(ChatState.IDLE)
-        val stop = callbacks.textMessages.last() as ListenMessage
-        assertEquals("stop", stop.state)
-        assertTrue(scheduler.cancelCount >= 1)
-        assertTrue(callbacks.events.contains(ChatEvent.USER_STOP_SPEAKING))
+        assertTrue(callbacks.events.contains(ChatEvent.AI_STOP_SPEAKING))
+    }
+
+    // ---------------- 状态迁移 ----------------
+
+    @Test
+    fun `完整对话流程 IDLE - USER_SPEAKING - AI_SPEAKING - IDLE`() {
+        createMachine()
+        // IDLE：直接发送音频帧
+        machine.handleAudioLevel(0.05f, frame(0.05f))
+        assertEquals(1, callbacks.audioFrames.size)
+        assertEquals(ChatState.IDLE, machine.state)
+
+        // 服务器端 VAD 检测到用户说话：进入 USER_SPEAKING（不重发 listen start）
+        machine.setState(ChatState.USER_SPEAKING)
+        assertEquals(ChatState.USER_SPEAKING, machine.state)
+        assertTrue(callbacks.textMessages.filterIsInstance<ListenMessage>().isEmpty())
+
+        // 用户说话中：持续发送音频帧
+        machine.handleAudioLevel(0.3f, frame(0.3f))
+        assertEquals(2, callbacks.audioFrames.size)
+
+        // 服务器发送 TTS start：进入 AI_SPEAKING
+        machine.setState(ChatState.AI_SPEAKING)
+        assertEquals(ChatState.AI_SPEAKING, machine.state)
+        assertTrue(callbacks.events.contains(ChatEvent.AI_START_SPEAKING))
+
+        // AI 播放中：完全不上行
+        machine.handleAudioLevel(0.05f, frame(0.05f))
+        assertEquals(2, callbacks.audioFrames.size)
+
+        // AI 播放完成：回到 IDLE
+        machine.setState(ChatState.IDLE)
+        assertEquals(ChatState.IDLE, machine.state)
+        assertTrue(callbacks.events.contains(ChatEvent.AI_STOP_SPEAKING))
     }
 
     @Test
@@ -347,17 +229,6 @@ class ChatStateMachineTest {
         machine.setState(ChatState.USER_SPEAKING)
 
         assertEquals(0, count)
-    }
-
-    @Test
-    fun `电平驱动的迁移同样触发 onStateChanged`() {
-        createMachine()
-        val states = mutableListOf<ChatState>()
-        machine.onStateChanged = { states.add(it) }
-
-        repeat(4) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
-
-        assertEquals(listOf(ChatState.USER_SPEAKING), states)
     }
 
     private companion object {

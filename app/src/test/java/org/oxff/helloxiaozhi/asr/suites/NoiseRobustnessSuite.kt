@@ -26,9 +26,11 @@ object NoiseRobustnessSuite {
                 noisyInput(cleanSpeech("今天天气怎么样"), noiseLevel, NoisyAudioSource.NoiseType.WHITE)
                 expectStt("今天天气怎么样")
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("noise")
                 withTag("white")
             })
@@ -40,9 +42,9 @@ object NoiseRobustnessSuite {
             noisyInput(cleanSpeech("我想去附近的公园"), 0.05f, NoisyAudioSource.NoiseType.STREET)
             expectStt("我想去附近的公园")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             withTag("noise")
             withTag("street")
         })
@@ -53,9 +55,9 @@ object NoiseRobustnessSuite {
             noisyInput(cleanSpeech("请帮我定一个闹钟"), 0.05f, NoisyAudioSource.NoiseType.BABBLE)
             expectStt("请帮我定一个闹钟")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                Trigger.SERVER_VAD, 500)
             expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                Trigger.SILENCE_TIMEOUT, 2000)
+                Trigger.SERVER_TTS_START, 2000)
             withTag("noise")
             withTag("babble")
         })
@@ -83,9 +85,11 @@ object NoiseRobustnessSuite {
                 noisyInput(cleanSpeech("打开客厅的灯"), noiseLevel, NoisyAudioSource.NoiseType.AC_OUTDOOR)
                 expectStt("打开客厅的灯")
                 expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
-                    Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
+                    Trigger.SERVER_VAD, 500)
                 expectTransition(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING,
-                    Trigger.SILENCE_TIMEOUT, 2000)
+                    Trigger.SERVER_TTS_START, 2000)
+                expectTransition(ChatState.AI_SPEAKING, ChatState.IDLE,
+                    Trigger.SERVER_TTS_STOP, 2000)
                 withTag("noise")
                 withTag("ac_outdoor")
             })

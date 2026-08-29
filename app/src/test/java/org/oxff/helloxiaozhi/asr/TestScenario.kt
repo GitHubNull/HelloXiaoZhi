@@ -64,7 +64,9 @@ enum class Trigger {
     SILENCE_TIMEOUT,
     USER_INTERRUPT,
     SERVER_TTS_START,
-    SERVER_TTS_STOP
+    SERVER_TTS_STOP,
+    /** 服务器端 VAD 触发（对齐参考 APP auto 模式） */
+    SERVER_VAD
 }
 
 /** 场景构建器（DSL） */
