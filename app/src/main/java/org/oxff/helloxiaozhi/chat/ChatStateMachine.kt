@@ -13,7 +13,8 @@ import org.oxff.helloxiaozhi.util.UiExecutor
  *  - USER_SPEAKING：持续发送音频帧；电平 < 0.04 连续 5 帧启动静音计时
  *    （1000ms），计时到期 → AI_SPEAKING；恢复说话则取消计时
  *  - AI_SPEAKING：电平 > 0.1 连续 3 帧视为用户打断 → 发送 abort →
- *    USER_SPEAKING；打断确认期间的帧由预触发缓冲补发，保证打断句首完整
+ *    USER_SPEAKING；AI 说话期间帧进预触发缓冲（容量 [PRE_ROLL_INTERRUPT_FRAMES]），
+ *    打断时补发缓冲帧 + 打断确认帧，保证打断句首完整
  *
  * 消息副作用：
  *  - 进入 USER_SPEAKING：补发预触发缓冲帧 → 发送 listen start（携带 session_id）
@@ -49,12 +50,11 @@ class ChatStateMachine(
         /**
          * 判定用户开始说话的音频电平阈值（App.vue USER_SPEAKING）。
          *
-         * 取值依据：中文句首轻声（如"你"、"今"、"晚"）电平常在 0.02~0.09 之间，
-         * 原阈值 0.04 会导致 VAD 防抖计数器反复重置（电平在阈值边缘徘徊），
-         * 句首轻声段被挤出预触发缓冲，服务器只收到后半句（如"你猜"只识别到"猜"）。
-         * 降为 0.02 可让句首轻声段更容易触发，同时保持 3 帧防抖过滤噪音。
+         * 取值依据：中文句首轻声（如"你"、"今"、"晚"）电平常在 0.015~0.09 之间，
+         * 原阈值 0.02 在真实环境中仍可能错过极轻声句首。
+         * 降为 0.015 可让句首轻声段更容易触发，同时保持 4 帧防抖过滤噪音。
          */
-        const val THRESHOLD_SPEAKING = 0.02f
+        const val THRESHOLD_SPEAKING = 0.015f
 
         /** 用户打断 AI 的音频电平阈值（App.vue USER_INTERRUPT_AI） */
         const val THRESHOLD_INTERRUPT = 0.1f
@@ -62,8 +62,8 @@ class ChatStateMachine(
         /** 用户停止说话后进入 AI 回答的静音时长（App.vue SILENCE） */
         const val SILENCE_MS = 1000L
 
-        /** 进入 USER_SPEAKING 需连续确认的帧数（约 180ms，参考 FSMN-VAD sil_to_speech_time_thres） */
-        const val REQUIRED_SPEAKING_FRAMES = 3
+        /** 进入 USER_SPEAKING 需连续确认的帧数（约 240ms，增加防抖） */
+        const val REQUIRED_SPEAKING_FRAMES = 4
 
         /** 退出 USER_SPEAKING 需连续确认的帧数（约 300ms，参考 FSMN-VAD speech_to_sil_time_thres） */
         const val REQUIRED_SILENCE_FRAMES = 5
@@ -187,10 +187,15 @@ class ChatStateMachine(
                 // AI 说话期间停止上行音频帧：避免服务器端 VAD 把 AI 播放的 TTS
                 // （通过麦克风捕获）误判为用户语音，导致自问自答（如 AI 说"对啦"
                 // 被识别为用户说"对"）。用户打断时通过 listen start 重新建立音频流。
-                // 注意：AI_SPEAKING 期间不缓存帧到预触发缓冲，因为缓存的帧包含
-                // AEC 残留的 TTS 声音，补发会导致 STT 识别错误（如"只加味精和盐"
-                // 被识别为"指甲味经和炎"）
-                // 同时停止电平检测：避免环境噪音（如空调外机）触发误打断
+                // 但帧仍缓存进预触发缓冲：真机日志证实不缓存会导致打断句首丢失——
+                // 打断确认 3 帧（180ms）+ onset 前导帧被丢弃（如"那我有个问题…"
+                // 只识别到"下我有个问题"）。VOICE_COMMUNICATION + 硬件 AEC 下
+                // AI 播放期间残留电平仅 0.011~0.06，远低于打断阈值，补发安全。
+                // 【调试】记录AI说话期间的电平，便于诊断
+                pushPreRoll(frame, PRE_ROLL_INTERRUPT_FRAMES)
+                if (level > 0.01f) {
+                    logger?.invoke("AI_SPEAKING期间检测到电平: $level")
+                }
                 if (level > THRESHOLD_INTERRUPT) {
                     consecutiveInterruptFrames++
                     if (consecutiveInterruptFrames >= REQUIRED_INTERRUPT_FRAMES) {

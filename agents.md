@@ -53,7 +53,7 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 
 - **IDLE**：收到音频帧，电平 > 0.02 → `USER_SPEAKING`（触发帧不发送）
 - **USER_SPEAKING**：每帧上行 Opus；电平 < 0.02 启动静音计时（1s），到期 → `AI_SPEAKING`；恢复说话取消计时
-- **AI_SPEAKING**：电平 > 0.1 → 发送 `AbortMessage`（携带 session_id）→ `USER_SPEAKING`
+- **AI_SPEAKING**：帧不上行但缓存进预触发缓冲（16 帧）；电平 > 0.1 连续 3 帧 → 发送 `AbortMessage`（携带 session_id）→ `USER_SPEAKING`，打断时补发缓冲帧保证句首完整；另外收到服务器 `stt` 时若仍在 `USER_SPEAKING` 会立即收尾（发 listen stop 停上行），避免尾部噪声被识别为幻觉词
 
 ### 3.3 消息副作用（transition 内触发）
 

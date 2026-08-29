@@ -4,6 +4,15 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-08-29
+
+### Fixed
+
+- 修复句首轻声识别丢失：说话判定阈值 `THRESHOLD_SPEAKING` 由 0.02 下调至 0.015，防抖帧数 3→4（增加抗噪）
+- 修复打断 AI 时句首丢失：AI_SPEAKING 期间帧重新缓存进预触发缓冲（16 帧），打断时补发缓冲帧 + 确认帧，避免「那我有个问题…」只识别到后半句（VOICE_COMMUNICATION + 硬件 AEC 下 TTS 残留电平远低于打断阈值，补发安全）
+- 修复通话首句句首字符丢失：Opus 编码器冷启动预热（预编码 20 帧静音丢弃，SILK 模式收敛）
+- 修复识别幻觉词：首条 `stt` 到达时若客户端仍在 `USER_SPEAKING` 立即收尾（发 listen stop + 停上行），避免尾部静音/呼吸噪声被服务器识别为「嗯。」「对。」等第二句
+
 ## [0.3.0] - 2026-08-29
 
 ### Added

@@ -325,7 +325,14 @@ class XiaoZhiController(
         if (stateMachine.state != ChatState.IDLE) {
             stateMachine.setState(ChatState.IDLE)
         }
-        val encoder = opusEncoder ?: OpusCodec.encoder().also { opusEncoder = it }
+        val encoder = opusEncoder ?: OpusCodec.encoder().also { created ->
+            opusEncoder = created
+            // Opus 编码器冷启动预热：编码器仅在 USER_SPEAKING 时才编码，
+            // 通话首句是创建后的首次编码，SILK 模式前几帧质量未收敛，
+            // 导致首句句首字符识别丢失（真机日志：「我想了解一下…」
+            // 只识别到「想了解一下」）。预编码静音帧让编码器收敛，丢弃结果。
+            warmupEncoder(created)
+        }
         recorder = AudioRecorderManager(
             onFrame = { frame, level -> stateMachine.handleAudioLevel(level, frame) },
             onError = { message ->
@@ -342,6 +349,17 @@ class XiaoZhiController(
         recorder = null
         player.pausePlayback()
         stateMachine.reset()
+    }
+
+    /** 编码器预热：编码若干帧静音并丢弃，使 SILK 模式状态收敛 */
+    private fun warmupEncoder(encoder: OpusCodec) {
+        val silence = ShortArray(OpusCodec.FRAME_SIZE)
+        try {
+            repeat(20) { encoder.encode(silence) }
+            Log.i(TAG, "opus encoder warmed up")
+        } catch (e: Exception) {
+            Log.w(TAG, "opus encoder warmup failed: ${e.message}")
+        }
     }
 
     private fun stopVoiceCallIfActive() {
@@ -394,6 +412,15 @@ class XiaoZhiController(
                 message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     Log.i(TAG, "[WS] stt text=「$it」")
                     appendChat(botAtParse, ChatRole.USER, it)
+                }
+                // 服务器端 VAD 先于客户端结束识别：首条 stt 到达时若客户端仍在
+                // USER_SPEAKING，说明句子已说完，立即收尾（发 listen stop + 停止上行）。
+                // 真机日志证实继续上行尾部帧（静音+呼吸/口噪）会被服务器识别为
+                // 第二句幻觉词（如真实句后紧跟「嗯。」「对。」）
+                mainHandler.post {
+                    if (stateMachine.state == ChatState.USER_SPEAKING) {
+                        stateMachine.setState(ChatState.AI_SPEAKING)
+                    }
                 }
             }
             "llm" -> {

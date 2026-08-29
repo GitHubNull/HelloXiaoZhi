@@ -10,18 +10,18 @@ import org.oxff.helloxiaozhi.chat.ChatState
  * VAD 边界测试套件：验证语音活动检测的阈值与防抖机制。
  *
  * 对齐 ChatStateMachine 常量：
- *  - THRESHOLD_SPEAKING = 0.02（严格大于才触发）
- *  - REQUIRED_SPEAKING_FRAMES = 3（3 帧防抖）
+ *  - THRESHOLD_SPEAKING = 0.015（严格大于才触发）
+ *  - REQUIRED_SPEAKING_FRAMES = 4（4 帧防抖）
  *
  * 合成信号的电平口径与 AudioMath.rmsLevel 一致（绝对均值/32768）。
  */
 object VadBoundarySuite {
 
     val scenarios: List<AsrTestScenario> = listOf(
-        // 场景 1：电平恰好等于阈值（0.02，不满足严格大于，不应触发）
+        // 场景 1：电平恰好等于阈值（0.015，不满足严格大于，不应触发）
         scenario("VAD_阈值边界_恰好等于") {
-            description("恒定电平 0.02 恰好等于阈值，验证严格大于判定")
-            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.02f)
+            description("恒定电平 0.015 恰好等于阈值，验证严格大于判定")
+            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.015f)
             expectStt("")
             withTag("vad")
             withTag("boundary")
@@ -29,8 +29,8 @@ object VadBoundarySuite {
 
         // 场景 2：电平略低于阈值
         scenario("VAD_阈值边界_略低于") {
-            description("恒定电平 0.015 略低于阈值，不应触发")
-            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.015f)
+            description("恒定电平 0.012 略低于阈值，不应触发")
+            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.012f)
             expectStt("")
             withTag("vad")
             withTag("boundary")
@@ -38,8 +38,8 @@ object VadBoundarySuite {
 
         // 场景 3：电平略高于阈值（应触发）
         scenario("VAD_阈值边界_略高于") {
-            description("恒定电平 0.025 略高于阈值，应在 3 帧防抖后触发")
-            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.025f)
+            description("恒定电平 0.02 略高于阈值，应在 4 帧防抖后触发")
+            syntheticInput(SyntheticAudioSource.AudioPattern.CONSTANT_LEVEL, 1500, 0.02f)
             expectStt("测试")
             expectTransition(ChatState.IDLE, ChatState.USER_SPEAKING,
                 Trigger.AUDIO_LEVEL_ABOVE_THRESHOLD, 500)
