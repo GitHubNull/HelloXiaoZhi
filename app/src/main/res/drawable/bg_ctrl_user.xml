@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .ctrl-btn.user-gain .ctrl-icon { rgba(34,211,238,.12) + rgba(34,211,238,.25) } -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#1F22D3EE" />
+    <stroke
+        android:width="@dimen/xz_stroke"
+        android:color="#4022D3EE" />
+</shape>

@@ -8,6 +8,11 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.oxff.helloxiaozhi.activation.ActivationFlow
 import org.oxff.helloxiaozhi.audio.AudioPlayer
@@ -27,9 +32,10 @@ import org.oxff.helloxiaozhi.chat.LlmMessage
 import org.oxff.helloxiaozhi.chat.SttMessage
 import org.oxff.helloxiaozhi.chat.TtsMessage
 import org.oxff.helloxiaozhi.config.AppConfig
+import org.oxff.helloxiaozhi.data.Bot
+import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.net.OtaClient
 import org.oxff.helloxiaozhi.net.XiaoZhiWebSocket
-import org.oxff.helloxiaozhi.util.DeviceInfoProvider
 import org.oxff.helloxiaozhi.util.HandlerExecutor
 import org.oxff.helloxiaozhi.util.HandlerSilenceScheduler
 import java.text.SimpleDateFormat
@@ -42,6 +48,8 @@ import java.util.concurrent.TimeUnit
  *
  *  - 连接流程：官方直连模式先走 OTA 注册/验证码激活，再建 WebSocket；
  *    自定义服务器模式直接连接
+ *  - 多机器人：每个机器人是独立设备身份（MAC 即 Device-Id），切换时
+ *    先断开再以新身份重连；消息按归属机器人落库
  *  - 消息分发：文本帧按 type 分发（hello/stt/llm/tts）；二进制帧按魔数
  *    分流（RIFF = 代理下发的 WAV，否则 = 官方直连的原始 Opus）
  *  - 语音链路：录音帧 → 电平 → 状态机 → Opus 编码上行；Opus 解码 →
@@ -50,12 +58,15 @@ import java.util.concurrent.TimeUnit
  *
  * 所有 UI 回调（on*）保证在主线程触发。
  */
-class XiaoZhiController(appContext: Context) {
-
-    val config = AppConfig(appContext)
+class XiaoZhiController(
+    appContext: Context,
+    val config: AppConfig,
+    private val gson: Gson,
+    private val repository: BotRepository,
+) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val gson = Gson()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val okHttp = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -64,7 +75,7 @@ class XiaoZhiController(appContext: Context) {
         .build()
 
     private val otaClient = OtaClient(okHttp, gson)
-    private val activationFlow = ActivationFlow(otaClient, config)
+    private val activationFlow = ActivationFlow(otaClient)
     private val player = AudioPlayer()
 
     private var recorder: AudioRecorderManager? = null
@@ -108,6 +119,8 @@ class XiaoZhiController(appContext: Context) {
     ).apply {
         // 状态迁移日志（真机诊断用）
         logger = { msg -> Log.i(TAG, "[SM] $msg") }
+        // 通话页的星河双球动画由真实状态驱动
+        onStateChanged = { state -> onChatStateChanged?.invoke(state) }
     }
 
     @Volatile
@@ -118,17 +131,24 @@ class XiaoZhiController(appContext: Context) {
     var connectionStatus = ConnectionStatus.DISCONNECTED
         private set
 
+    /** 当前激活的机器人（其 MAC 即握手时的 Device-Id） */
+    @Volatile
+    var activeBotId: String? = null
+        private set
+
     /** 当前语音通话状态（UI 直接读取） */
     val chatState: ChatState get() = stateMachine.state
 
     // ---------------- UI 回调（主线程触发） ----------------
 
     var onConnectionStatusChanged: ((ConnectionStatus) -> Unit)? = null
-    var onChatMessage: ((ChatMessage) -> Unit)? = null
+
+    /** 新消息落库后触发；botId 用于跨机器人归属与未读统计 */
+    var onChatMessage: ((botId: String, message: ChatMessage) -> Unit)? = null
     var onChatStateChanged: ((ChatState) -> Unit)? = null
     var onUserWaveLevel: ((Float) -> Unit)? = null
 
-    /** 官方模式需要激活时回调（code = 6 位验证码） */
+    /** 官方模式需要激活时回调（code 为 6 位验证码） */
     var onActivationCodeRequired: ((String) -> Unit)? = null
 
     /** 激活完成（对话框可关闭） */
@@ -173,10 +193,7 @@ class XiaoZhiController(appContext: Context) {
     private val ws = XiaoZhiWebSocket(okHttp, config, gson, wsListener)
 
     init {
-        // 首次启动生成设备 ID（MAC 格式，对应 config.py 的 DEVICE_ID）
-        if (config.deviceId.isBlank()) {
-            config.deviceId = DeviceInfoProvider.obtainDeviceId(appContext)
-        }
+        activeBotId = repository.defaultBot()?.id
         // 播放队列播空 → 回到 IDLE（对应 Web 端 onQueueEmpty）
         player.onQueueEmpty = {
             mainHandler.post {
@@ -194,11 +211,15 @@ class XiaoZhiController(appContext: Context) {
 
     /** 确保 WebSocket 已连接（官方模式先走激活流程） */
     fun ensureConnected() {
-        if (connectionStatus == ConnectionStatus.CONNECTED) return
+        if (connectionStatus == ConnectionStatus.CONNECTED ||
+            connectionStatus == ConnectionStatus.CONNECTING
+        ) return
+        val bot = repository.bot(activeBotId) ?: return
+        setConnectionStatus(ConnectionStatus.CONNECTING)
         if (config.isOfficialMode()) {
-            activationFlow.ensureActivated(activationListener)
+            activationFlow.ensureActivated(identityFor(bot), activationListener)
         } else {
-            connectWebSocket()
+            ws.connect(bot.mac)
         }
     }
 
@@ -215,9 +236,34 @@ class XiaoZhiController(appContext: Context) {
         setConnectionStatus(ConnectionStatus.DISCONNECTED)
     }
 
-    private fun connectWebSocket() {
-        ws.connect()
+    /**
+     * 切换当前激活的机器人。
+     *
+     * 顺序是强制的：先取消激活轮询、再断开（disconnect 是唯一清除
+     * autoReconnect 与待执行重连任务的地方）、然后才提交新身份并触发重连。
+     * 否则排队中的重连任务会用切换后的 MAC 重连，造成身份错乱。
+     */
+    fun switchActiveBot(botId: String) {
+        if (activeBotId == botId && connectionStatus == ConnectionStatus.CONNECTED) return
+        val bot = repository.bot(botId) ?: return
+        activationFlow.cancel()
+        ws.disconnect()
+        stopVoiceCallIfActive()
+        sessionId = ""
+        setConnectionStatus(ConnectionStatus.DISCONNECTED)
+        activeBotId = botId
+        repository.activeBotId = botId
+        ensureConnected()
     }
+
+    /** 当前激活机器人是否已完成绑定（OTA 不再返回 activation 字段） */
+    fun isActiveBotActivated(): Boolean = repository.bot(activeBotId)?.activated == true
+
+    private fun identityFor(bot: Bot) = ActivationFlow.Identity(
+        otaUrl = config.otaUrl,
+        deviceId = bot.mac,
+        clientId = config.clientId,
+    )
 
     private val activationListener = ActivationFlow.Listener().apply {
         onCodeRequired = { code ->
@@ -225,15 +271,32 @@ class XiaoZhiController(appContext: Context) {
         }
         onActivated = { code ->
             mainHandler.post {
+                repository.bot(activeBotId)?.let { repository.markActivated(it.id, true) }
                 onActivationCompleted?.invoke()
                 // 激活完成后必须新建 WebSocket 连接（官方协议要求）
-                connectWebSocket()
+                repository.bot(activeBotId)?.let { ws.connect(it.mac) }
             }
         }
         onError = { message ->
             mainHandler.post {
                 setConnectionStatus(ConnectionStatus.ERROR)
                 onError?.invoke(message)
+            }
+        }
+    }
+
+    // ---------------- 任意 MAC 的激活码（添加机器人模态框） ----------------
+
+    /** 为任意 MAC 请求一次激活码（不轮询、不改全局配置、不占用激活流程） */
+    fun requestActivationCodeFor(mac: String, callback: (code: String?, error: String?) -> Unit) {
+        scope.launch {
+            try {
+                val code = activationFlow.probeOnce(
+                    ActivationFlow.Identity(config.otaUrl, mac, config.clientId),
+                )
+                callback(code, null)
+            } catch (e: Exception) {
+                callback(null, e.message ?: "请求失败")
             }
         }
     }
@@ -281,6 +344,20 @@ class XiaoZhiController(appContext: Context) {
         stateMachine.reset()
     }
 
+    private fun stopVoiceCallIfActive() {
+        if (recorder != null) stopVoiceCall()
+    }
+
+    /** 通话页增益：AI 播放音量（0..2 线性倍数，1 为原始音量） */
+    fun setPlaybackGain(gain: Float) {
+        player.playbackGain = gain
+    }
+
+    /** 通话页增益：上行音量（dB，相对基准；只影响上行，不影响 VAD 灵敏度） */
+    fun setMicGainDb(db: Float) {
+        recorder?.micGainDb = db
+    }
+
     /** 应用退出清理 */
     fun shutdown() {
         recorder?.stop()
@@ -289,6 +366,7 @@ class XiaoZhiController(appContext: Context) {
         stateMachine.destroy()
         ws.disconnect()
         activationFlow.shutdown()
+        scope.cancel()
         opusEncoder?.close()
         opusEncoder = null
         opusDecoder?.close()
@@ -304,6 +382,9 @@ class XiaoZhiController(appContext: Context) {
         } catch (_: Exception) {
             return // 非 JSON 文本直接忽略（对应后端 JSONDecodeError 兜底）
         }
+        // 捕获解析时刻的归属机器人：切换机器人后，OkHttp 线程上已派发但尚未
+        // post 到主线程的迟到帧仍应落进原机器人的历史，而不是污染新机器人
+        val botAtParse = activeBotId
         val type = json.get("type")?.asString
         if (type != "hello") Log.i(TAG, "[WS] text type=$type")
         when (type) {
@@ -312,17 +393,17 @@ class XiaoZhiController(appContext: Context) {
                 val message = gson.fromJson(json, SttMessage::class.java)
                 message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     Log.i(TAG, "[WS] stt text=「$it」")
-                    appendChat(ChatRole.USER, it)
+                    appendChat(botAtParse, ChatRole.USER, it)
                 }
             }
             "llm" -> {
                 val message = gson.fromJson(json, LlmMessage::class.java)
                 message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     Log.i(TAG, "[WS] llm text=「$it」")
-                    appendChat(ChatRole.AI, it)
+                    appendChat(botAtParse, ChatRole.AI, it)
                 }
             }
-            "tts" -> handleTts(json)
+            "tts" -> handleTts(json, botAtParse)
             else -> Unit
         }
     }
@@ -342,7 +423,7 @@ class XiaoZhiController(appContext: Context) {
     }
 
     /** TTS 状态消息（对应 App.vue tts 分支） */
-    private fun handleTts(json: JsonObject) {
+    private fun handleTts(json: JsonObject, botAtParse: String?) {
         val tts = gson.fromJson(json, TtsMessage::class.java)
         when (tts.state) {
             TtsMessage.STATE_START -> {
@@ -357,7 +438,7 @@ class XiaoZhiController(appContext: Context) {
                 // 以 % 开头的控制文本不展示（对应 App.vue blackList）
                 if (text.isNotEmpty() && !text.startsWith("%")) {
                     Log.i(TAG, "[WS] tts sentence=「$text」")
-                    appendChat(ChatRole.AI, text)
+                    appendChat(botAtParse, ChatRole.AI, text)
                 }
             }
             TtsMessage.STATE_STOP -> {
@@ -425,13 +506,16 @@ class XiaoZhiController(appContext: Context) {
 
     // ---------------- 辅助 ----------------
 
-    private fun appendChat(role: ChatRole, content: String) {
+    /** 先落库再通知 UI：归属机器人由解析时刻的 activeBotId 决定 */
+    private fun appendChat(botId: String?, role: ChatRole, content: String) {
+        val id = botId ?: return
+        val stored = repository.appendMessage(id, role, content) ?: return
         val message = ChatMessage(
             role = role,
             content = content,
-            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()),
+            time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(stored.ts)),
         )
-        mainHandler.post { onChatMessage?.invoke(message) }
+        mainHandler.post { onChatMessage?.invoke(id, message) }
     }
 
     private fun setConnectionStatus(status: ConnectionStatus) {

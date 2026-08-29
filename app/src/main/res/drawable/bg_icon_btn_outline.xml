@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .btn-call { 圆形; bg-input + 1px border-subtle } -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/xz_bg_input" />
+    <stroke
+        android:width="@dimen/xz_stroke"
+        android:color="@color/xz_border_subtle" />
+</shape>

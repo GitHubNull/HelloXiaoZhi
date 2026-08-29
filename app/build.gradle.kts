@@ -10,8 +10,8 @@ android {
         applicationId = "org.oxff.helloxiaozhi"
         minSdk = 21
         targetSdk = 27
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -51,6 +51,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
+    implementation(libs.androidx.recyclerview)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)

@@ -1,43 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文案逐条对应设计稿 index.html / call.html 与各 js 模块中的提示语 -->
 <resources>
-    <string name="app_name">HelloXiaoZhi</string>
-    <string name="settings_title">设置</string>
-    <string name="voice_call_title">小智语音通话</string>
+    <string name="app_name">小智 AI</string>
 
-    <!-- 主页 -->
+    <!-- ============ 顶部导航 / 连接状态 ============ -->
+    <string name="nav_title">小智 AI</string>
     <string name="status_connected">已连接</string>
+    <string name="status_connecting">连接中…</string>
     <string name="status_disconnected">未连接</string>
     <string name="status_error">连接错误</string>
-    <string name="input_hint">输入消息…</string>
+    <string name="status_activating">等待激活</string>
+    <string name="toast_reconnecting">连接失败，3 秒后自动重试</string>
+
+    <!-- ============ 底部 Tab ============ -->
+    <string name="tab_chat">聊天</string>
+    <string name="tab_contacts">通讯录</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- ============ 聊天 Tab ============ -->
+    <string name="chat_list_title">聊天</string>
+    <string name="chat_count">%1$d 个会话</string>
+    <string name="chat_empty_title">暂无聊天记录</string>
+    <string name="chat_empty_desc">去通讯录找一个 AI 机器人\n开始你的第一段对话吧</string>
+    <string name="chat_empty_action">去通讯录看看</string>
+    <string name="chat_preview_none">暂无消息</string>
+    <string name="chat_wake_marker">[唤醒]</string>
+    <string name="chat_unread_overflow">99+</string>
+
+    <!-- ============ 对话详情 ============ -->
+    <string name="input_hint">发送消息…</string>
     <string name="action_send">发送</string>
     <string name="action_call">语音通话</string>
-    <string name="action_settings">设置</string>
+    <string name="action_back">返回</string>
+    <string name="toast_not_connected">当前未连接，无法发送</string>
+    <string name="call_ended_system">语音通话结束 · 时长 %1$s</string>
 
-    <!-- 设置页 -->
-    <string name="settings_ws_url">服务器地址（WebSocket）</string>
-    <string name="settings_ota_url">OTA 注册地址</string>
-    <string name="settings_token_enable">Token 设置</string>
-    <string name="settings_token">Token（开启后连接时携带）</string>
+    <!-- ============ 通讯录 Tab ============ -->
+    <string name="contacts_title">通讯录</string>
+    <string name="contacts_count">%1$d 个 AI 机器人</string>
+    <string name="contacts_add">添加 AI 机器人</string>
+    <string name="bot_wake_badge">语音唤醒</string>
+    <string name="bot_pending_activation">待激活</string>
+    <string name="bot_delete_title">删除机器人</string>
+    <string name="bot_delete_desc">将同时清除与 %1$s 的聊天记录，且不可恢复。确定要删除吗？</string>
+    <string name="bot_delete_confirm">确认删除</string>
+    <string name="toast_bot_added">已添加 %1$s</string>
+    <string name="toast_bot_deleted">已删除 %1$s</string>
+    <string name="toast_last_bot">至少需要保留一个 AI 机器人</string>
+
+    <!-- ============ 添加机器人模态框 ============ -->
+    <string name="add_bot_title">添加 AI 机器人</string>
+    <string name="add_bot_desc">创建一个新的 AI 角色，自定义名称、性格和设定</string>
+    <string name="add_bot_mac_label">设备 MAC 地址</string>
+    <string name="add_bot_mac_hint">自动生成</string>
+    <string name="add_bot_mac_source_auto">自动获取</string>
+    <string name="add_bot_mac_source_custom">自定义</string>
+    <string name="add_bot_mac_note">默认使用设备 MAC，可自定义修改</string>
+    <string name="add_bot_mac_regen">重新生成 MAC 地址</string>
+    <string name="add_bot_get_code">获取该 MAC 的激活码</string>
+    <string name="add_bot_get_code_again">重新获取激活码</string>
+    <string name="add_bot_get_code_loading">正在向小智 AI 请求激活码…</string>
+    <string name="add_bot_code_placeholder">------</string>
+    <string name="add_bot_code_hint">此 MAC 已在小智服务器登记\n请在小智控制台网页端输入此验证码完成绑定</string>
+    <string name="add_bot_code_already_bound">该 MAC 已完成绑定，无需验证码</string>
+    <string name="add_bot_name_label">名称</string>
+    <string name="add_bot_name_hint">例如：小厨、小旅、小健</string>
+    <string name="add_bot_tags_label">性格标签（逗号分隔）</string>
+    <string name="add_bot_tags_hint">例如：温柔, 专业, 幽默</string>
+    <string name="add_bot_desc_label">简短介绍</string>
+    <string name="add_bot_desc_hint">描述这个 AI 机器人的专长和特点…</string>
+    <string name="add_bot_confirm">确认添加</string>
+    <string name="add_bot_avatar_title">选择头像颜色</string>
+    <string name="add_bot_avatar_change">点击更换头像</string>
+    <string name="add_bot_avatar_placeholder">AI</string>
+    <string name="add_bot_default_tag">自定义</string>
+    <string name="add_bot_default_desc">一个自定义的 AI 机器人。</string>
+    <string name="toast_bot_name_required">请输入机器人名称</string>
+    <string name="toast_mac_invalid">MAC 地址格式不正确，应为 xx:xx:xx:xx:xx:xx</string>
+    <string name="toast_mac_duplicated">该 MAC 已被「%1$s」占用，请换一个</string>
+
+    <!-- ============ 设置 Tab ============ -->
+    <string name="settings_title">设置</string>
+    <string name="settings_group_server">服务器配置</string>
+    <string name="settings_ws_url">WebSocket 服务器地址</string>
+    <string name="settings_ws_url_hint">小智 AI 实时通信服务地址，修改后将在下次连接时生效</string>
+    <string name="settings_ota_url">OTA 版本检查 URL</string>
+    <string name="settings_ota_url_hint">用于检查固件 / 应用版本更新</string>
+    <string name="settings_group_auth">认证配置</string>
+    <string name="settings_token_enable">启用 Token 认证</string>
+    <string name="settings_token_enable_hint">连接时在请求头中携带访问令牌</string>
+    <string name="settings_token">访问令牌（Token）</string>
+    <string name="settings_token_hint">输入你的访问令牌</string>
+    <string name="settings_group_wake">语音唤醒</string>
+    <string name="settings_wake_label">唤醒目标</string>
+    <string name="settings_wake_hint">选择语音指令默认唤醒的 AI 机器人。当前版本仅用于决定启动时的默认机器人，尚未接入唤醒词检测。</string>
+    <string name="settings_group_device">设备信息</string>
     <string name="settings_device_id">设备 ID</string>
-    <string name="settings_save">保存</string>
-    <string name="settings_saved">配置已保存</string>
-    <string name="settings_invalid">请检查填写内容是否有效</string>
+    <string name="settings_device_id_hint">本机物理 MAC，作为默认机器人的身份与新建机器人的初始值</string>
+    <string name="settings_copy_device_id">复制设备 ID</string>
+    <string name="settings_get_code">获取激活码</string>
+    <string name="settings_get_code_hint">点击获取设备绑定验证码，用于网页端激活</string>
+    <string name="settings_group_danger">危险操作</string>
+    <string name="settings_reset">重置应用数据</string>
+    <string name="settings_reset_hint">清除所有本地配置、聊天记录及机器人数据</string>
+    <string name="settings_save">保存配置</string>
+    <string name="toast_settings_saved">配置已保存</string>
+    <string name="toast_device_id_copied">设备 ID 已复制</string>
+    <string name="toast_ws_url_required">WebSocket 地址不能为空</string>
+    <string name="toast_ota_url_required">OTA 地址不能为空</string>
+    <string name="toast_token_required">已启用 Token 认证，请输入令牌</string>
+    <string name="toast_ws_url_invalid">WebSocket 地址需以 ws:// 或 wss:// 开头</string>
+    <string name="toast_ota_url_invalid">OTA 地址需以 http:// 或 https:// 开头</string>
+    <string name="toast_wake_target_set">已将 %1$s 设为唤醒目标</string>
 
-    <!-- 激活对话框 -->
-    <string name="activation_title">设备激活</string>
+    <!-- ============ 重置确认 ============ -->
+    <string name="reset_title">确认重置</string>
+    <string name="reset_desc">此操作将清除所有本地配置、聊天记录及自定义机器人数据，且不可恢复。确定要继续吗？</string>
+    <string name="reset_confirm">确认重置</string>
+    <string name="toast_reset_done">数据已重置</string>
+
+    <!-- ============ 设备激活 ============ -->
+    <string name="activation_title">设备待激活</string>
+    <string name="activation_desc">检测到新设备需要绑定\n请登录小智控制台网页端，输入以下验证码完成绑定</string>
+    <string name="activation_code_placeholder">------</string>
+    <string name="activation_check_now">立即检查</string>
+    <string name="activation_checking">检查中…</string>
+    <string name="activation_activated">激活成功，设备已绑定</string>
+    <string name="activation_error">激活检查失败：%1$s</string>
+
+    <!-- ============ 语音通话页 ============ -->
+    <string name="call_connecting">正在接通…</string>
+    <string name="call_state_user">聆听中，请说话…</string>
+    <string name="call_state_ai">%1$s说话中…</string>
+    <string name="call_state_idle">通话中</string>
+    <string name="call_timer_zero">00:00</string>
+    <string name="call_label_ai">小智</string>
+    <string name="call_label_internet">互联网</string>
+    <string name="call_label_user">你</string>
+    <string name="call_connected">通话已接通</string>
+    <string name="call_finished">通话已结束</string>
+    <string name="hang_up">挂断</string>
+    <string name="call_gain_ai">机器人音量</string>
+    <string name="call_gain_user">你的音量</string>
+    <string name="call_gain_ai_label">机器人音量</string>
+    <string name="call_gain_user_label">上行音量</string>
+    <string name="call_gain_value">%1$d%%</string>
+
+    <!-- ============ 通用 ============ -->
+    <string name="action_cancel">取消</string>
+    <string name="action_confirm">确定</string>
+    <string name="action_settings">设置</string>
+    <string name="voice_call_title">小智语音通话</string>
+    <string name="time_yesterday">昨天</string>
+    <string name="permission_record_audio_required">需要录音权限才能进行语音通话</string>
+    <string name="error_connect_failed">连接失败：%1$s</string>
+
+    <!--
+      过渡文案：仅被旧版 SettingsActivity / ActivationDialog 及其布局引用，
+      待三 Tab 外壳与页内模态框落地后随旧页面一并删除。
+    -->
     <string name="activation_hint">请在 xiaozhi.me 网站控制台添加设备，输入下面的验证码</string>
-    <string name="activation_code">验证码</string>
     <string name="activation_waiting">等待激活中，每 5 秒自动检查一次…</string>
     <string name="activation_done">已添加设备，立即检查</string>
     <string name="activation_cancel">取消</string>
-    <string name="activation_activated">设备已激活</string>
-    <string name="activation_error">激活检查失败：%s</string>
-
-    <!-- 语音通话页 -->
-    <string name="hang_up">挂断</string>
-
-    <!-- 权限 -->
-    <string name="permission_record_audio_required">需要录音权限才能进行语音通话</string>
-
-    <!-- 错误提示 -->
-    <string name="error_connect_failed">连接失败：%s</string>
+    <string name="settings_saved">配置已保存</string>
+    <string name="settings_invalid">请检查填写内容是否有效</string>
 </resources>

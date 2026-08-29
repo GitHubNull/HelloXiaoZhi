@@ -14,18 +14,22 @@ HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 
 
 | 模块 | 关键符号 | 职责 |
 | --- | --- | --- |
-| 配置 | `AppConfig`（config/） | SharedPreferences 持久化：wsUrl / otaUrl / token / clientId / deviceId；`isOfficialMode()` 判定官方直连 |
-| 编排 | `XiaoZhiController`（controller/） | 核心胶水层：组装 WebSocket、激活流程、录音/播放、状态机；全部 UI 回调在主线程 |
-| WebSocket | `XiaoZhiWebSocket`（net/） | OkHttp WebSocket 客户端：握手头、hello、自动重连（3s） |
-| OTA | `OtaClient`（net/）、`ActivationFlow`（activation/） | HTTP 设备注册；验证码激活轮询（5s） |
-| 状态机 | `ChatStateMachine`（chat/） | 语音通话状态机（详见 §3） |
-| 消息模型 | `Messages.kt`、`ChatModels.kt`（chat/） | 上行/下行 JSON 消息数据类；ChatState/ChatEvent/ChatRole/ConnectionStatus |
-| 音频采集 | `AudioRecorderManager`（audio/） | AudioRecord 采集、成帧（960 采样/60ms）、RMS 电平、44.1k→16k 重采样兜底 |
-| 音频播放 | `AudioPlayer`（audio/） | AudioTrack 播放队列、打断清空、队列播空回调 |
+| 配置 | `AppConfig`（config/） | SharedPreferences 持久化：wsUrl / otaUrl / token / clientId / deviceId；`isOfficialMode()` 判定官方直连；`clear()` 供重置 |
+| 数据层 | `BotRepository`（data/） | 机器人/会话/未读/唤醒目标的 JSON 文件持久化（debounce 落盘、原子写、损坏回落 seed） |
+| 编排 | `XiaoZhiController`（controller/） | 核心胶水层：组装 WebSocket、激活流程、录音/播放、状态机；按机器人切换设备身份；全部 UI 回调在主线程 |
+| WebSocket | `XiaoZhiWebSocket`（net/） | OkHttp WebSocket 客户端：握手头、hello、自动重连（3s）；`connect(deviceId)` 钉住身份 |
+| OTA | `OtaClient`（net/）、`ActivationFlow`（activation/） | HTTP 设备注册；验证码激活轮询（5s）；`probeOnce` 为任意 MAC 单次取码 |
+| 状态机 | `ChatStateMachine`（chat/） | 语音通话状态机（详见 §3）；`onStateChanged` 驱动通话页动画 |
+| 消息模型 | `Messages.kt`、`ChatModels.kt`（chat/） | 上行/下行 JSON 消息数据类；ChatState/ChatEvent/ChatRole/ConnectionStatus（含 CONNECTING） |
+| 音频采集 | `AudioRecorderManager`（audio/） | AudioRecord 采集、成帧（960 采样/60ms）、RMS 电平、44.1k→16k 重采样兜底；上行增益与 VAD 解耦 |
+| 音频播放 | `AudioPlayer`（audio/） | AudioTrack 播放队列、打断清空、队列播空回调；`playbackGain` 播放增益 |
 | Opus 编解码 | `OpusCodec`（audio/）→ `app/src/main/cpp/opus_jni.c` | libopus JNI 封装；编码 16k/单声道/60ms；解码采样率动态 |
 | WAV 解析 | `WavParser`（audio/） | RIFF 魔数检测与解析（WebUI 代理下发的 WAV 分流） |
-| 工具 | `AudioMath`、`DeviceInfoProvider`、`Executors.kt`（util/） | 电平计算、设备 ID（MAC 格式）生成、主线程执行器/静音调度器 |
-| UI | `MainActivity` / `SettingsActivity` / `VoiceCallActivity` / `ActivationDialog`（ui/） | 聊天界面、设置、语音通话、激活对话框 |
+| 工具 | `AudioMath`、`DeviceInfoProvider`、`Executors.kt`、`MacGenerator`、`TimeFormat`（util/） | 电平计算、设备 ID（MAC 格式）生成、主线程执行器/静音调度器、MAC 生成校验、时间展示 |
+| UI 外壳 | `MainActivity`（ui/） | 三 Tab 外壳：导航栏 + 聊天/通讯录/设置 + 对话详情滑入层 + 模态框/Toast 宿主 |
+| 页面控制器 | `ui/page/{ChatPage,ChatDetail,ContactsPage,SettingsPage}Controller` | 各 Tab 的渲染与交互（普通 Kotlin 类，非 Fragment） |
+| 自定义 View | `ui/view/{StarfieldCallView,SlideInContainer,XzSwitch,WaveBarsView,ToastHost,ModalHost,Pressable,BubbleDrawables,AvatarPalette}` | 星河通话动画、滑入容器、开关、声浪、Toast、模态框、按压反馈、气泡/头像背景 |
+| 通话页 | `VoiceCallActivity`（ui/） | 二进制星河 + 计时 + 历史 + 增益控制 |
 
 ## 3. 语音通话状态机（ChatStateMachine）
 
@@ -39,14 +43,16 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 
 | 常量 | 值 | 含义 |
 | --- | --- | --- |
-| `THRESHOLD_SPEAKING` | 0.04f | 判定用户开始说话的电平阈值 |
+| `THRESHOLD_SPEAKING` | 0.02f | 判定用户开始说话的电平阈值（句首轻声优化后下调） |
 | `THRESHOLD_INTERRUPT` | 0.1f | 用户打断 AI 的电平阈值 |
 | `SILENCE_MS` | 1000L | 用户停止说话后进入 AI 回答的静音时长 |
 
+状态机新增 `onStateChanged: ((ChatState) -> Unit)?` 钩子，在 `transition()` 末尾触发；通话页的星河双球动画由它驱动（`XiaoZhiController` 转发给 `onChatStateChanged`）。
+
 ### 3.2 状态转换
 
-- **IDLE**：收到音频帧，电平 > 0.04 → `USER_SPEAKING`（触发帧不发送）
-- **USER_SPEAKING**：每帧上行 Opus；电平 < 0.04 启动静音计时（1s），到期 → `AI_SPEAKING`；恢复说话取消计时
+- **IDLE**：收到音频帧，电平 > 0.02 → `USER_SPEAKING`（触发帧不发送）
+- **USER_SPEAKING**：每帧上行 Opus；电平 < 0.02 启动静音计时（1s），到期 → `AI_SPEAKING`；恢复说话取消计时
 - **AI_SPEAKING**：电平 > 0.1 → 发送 `AbortMessage`（携带 session_id）→ `USER_SPEAKING`
 
 ### 3.3 消息副作用（transition 内触发）
@@ -111,17 +117,19 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 
 ### 5.3 连接生命周期
 
-- `connect()`：已连接时 no-op；`disconnect()`：置 autoReconnect=false 并 close(1000)
-- 断线（onClosed/onFailure）→ 3 秒后自动重连（`RECONNECT_DELAY_MS=3000`）
-- 连接状态枚举 `ConnectionStatus`：CONNECTED / DISCONNECTED / ERROR
+- `connect(deviceId)`：已连接时 no-op；`disconnect()`：置 autoReconnect=false 并 close(1000)
+- 断线（onClosed/onFailure）→ 3 秒后自动重连（`RECONNECT_DELAY_MS=3000`），重连复用 connect 时钉住的 deviceId
+- 连接状态枚举 `ConnectionStatus`：CONNECTED / CONNECTING / DISCONNECTED / ERROR
+- 切换机器人：`XiaoZhiController.switchActiveBot(botId)` 按「取消激活轮询 → 断开 → 改身份 → 重连」的顺序执行，避免排队中的重连任务用错身份
 
 ## 6. 激活与连接流程（官方直连模式）
 
-1. `XiaoZhiController.ensureConnected()`：官方模式（`AppConfig.isOfficialMode()`）→ `ActivationFlow.ensureActivated()`
-2. `OtaClient.register()` POST OTA 注册（payload 逐字段对齐 websocket_proxy.py，模拟 ESP32 固件信息）
+1. `XiaoZhiController.ensureConnected()`：官方模式（`AppConfig.isOfficialMode()`）→ `ActivationFlow.ensureActivated(identity, listener)`，identity 取当前激活机器人的 MAC
+2. `OtaClient.register(otaUrl, deviceId, clientId, localIp)` POST OTA 注册（payload 逐字段对齐 websocket_proxy.py，模拟 ESP32 固件信息）
 3. 响应含 `activation.code`（6 位验证码）→ `onActivationCodeRequired` 弹框展示，每 5s 轮询（`POLL_INTERVAL_MS=5000`），用户可点「我已添加设备」立即检查（`requestCheckNow()`）
 4. `activation` 字段消失 → `onActivated` → **必须新建 WebSocket 连接**（官方协议要求）
-5. 自定义模式（非官方 URL）跳过激活直接 `connectWebSocket()`
+5. 自定义模式（非官方 URL）跳过激活直接 `ws.connect(bot.mac)`
+6. 「获取该 MAC 的激活码」（添加机器人模态框）调用 `ActivationFlow.probeOnce(identity)`：单次注册、不轮询、不改全局配置
 
 ## 7. 与参考实现的对应关系
 
@@ -137,14 +145,17 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 
 ## 8. 测试与构建
 
-- **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`。运行：`gradlew testDebugUnitTest`
+- **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`、`BotRepositoryTest`、`MacGeneratorTest`、`TimeFormatTest`、`AvatarPaletteTest`。运行：`gradlew testDebugUnitTest`
 - **仪器化测试**（`app/src/androidTest/`）：`AudioRecordProbeInstrumentedTest`、`OpusCodecInstrumentedTest`。运行需真机/模拟器
 - **构建**：`gradlew assembleDebug`；原生库由 CMake 编译（`app/src/main/cpp/CMakeLists.txt`），ABI：arm64-v8a / armeabi-v7a / x86_64 / x86
 - **构建约束**：OkHttp 锁定 4.12.0（最后一个支持 API 21 的版本，勿升级）；targetSdk 27 且 lint 禁用 `ExpiredTargetSdkVersion`（兼容旧设备）；Java/Kotlin target 11
+- **命令行构建必须显式指定 JDK 21**：裸跑会因工具链自动探测选中 Qoder redhat.java 扩展自带的 JRE 21（无 jlink）而失败。追加 `-Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.java.installations.paths='D:\dev_env\java\jdk\21'`
 
 ## 9. 常见改动提示
 
 - 改动协议消息字段：同步修改 `Messages.kt` 与 `ref/xiaozhi-webui-master/src/types/message.ts`
 - 改动状态机逻辑：必须更新 `ChatStateMachineTest` 中对应的转换用例
+- 改动机器人/会话数据模型或持久化格式：必须更新 `BotRepositoryTest`；`AppData.version` 递增以触发旧档重建
+- 改动 UI 结构：保持三 Tab 外壳的层叠顺序（Tab 内容 < Tab 栏 < 对话详情 < 模态框 < Toast），且 controller 回调只在 `MainActivity` 单点绑定再分发，不要在页面控制器里直接绑定
 - 改动音频参数（采样率/帧长）：`AudioParams`（hello）、`OpusCodec.FRAME_SIZE`、`AudioRecorderManager` 成帧逻辑需同步
 - 真机排障：Logcat 过滤 `XiaoZhiController`（连接/消息）、`AudioRecorder`（电平帧）、`XiaoZhiWebSocket`（WS 生命周期）、`[SM]` 前缀（状态迁移）

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 聊天 Tab：会话列表 + 空状态（对应设计稿 .chat-list-view） -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="10dp">
+
+            <TextView
+                style="@style/Xz.Text.SectionTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/chat_list_title" />
+
+            <TextView
+                android:id="@+id/chat_count"
+                style="@style/Xz.Text.Hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chat_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false" />
+    </LinearLayout>
+
+    <!-- 空状态（对应设计稿 .empty-state） -->
+    <LinearLayout
+        android:id="@+id/chat_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="40dp"
+        android:visibility="gone">
+
+        <FrameLayout
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:background="@drawable/bg_empty_icon">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_tab_chat"
+                android:tint="@color/xz_primary" />
+        </FrameLayout>
+
+        <TextView
+            style="@style/Xz.Text.ItemTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/chat_empty_title" />
+
+        <TextView
+            style="@style/Xz.Text.Hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/chat_empty_desc" />
+
+        <TextView
+            android:id="@+id/chat_empty_action"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_btn_pill_outline"
+            android:paddingStart="24dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="24dp"
+            android:paddingBottom="10dp"
+            android:text="@string/chat_empty_action"
+            android:textColor="@color/xz_primary"
+            android:textSize="13sp" />
+    </LinearLayout>
+</FrameLayout>

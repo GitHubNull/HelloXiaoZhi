@@ -7,7 +7,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.oxff.helloxiaozhi.config.AppConfig
 import java.io.IOException
 import java.net.SocketTimeoutException
 
@@ -27,14 +26,24 @@ class OtaClient(
     /**
      * 发起 OTA 注册请求。
      *
+     * 身份字段显式传入而非从 AppConfig 读取：每个机器人是独立设备身份，
+     * 「获取该 MAC 的激活码」需要为任意 MAC 发起注册而不触碰全局配置。
+     *
+     * @param deviceId 设备 MAC（同时作为请求头 Device-Id 与 payload 的 mac_address）
+     * @param clientId 客户端 UUID（payload 的 uuid，全局共享）
      * @throws OtaException 请求失败/超时（错误文案与 ref 后端一致）
      */
-    suspend fun register(config: AppConfig, localIp: String): OtaResponse =
+    suspend fun register(
+        otaUrl: String,
+        deviceId: String,
+        clientId: String,
+        localIp: String,
+    ): OtaResponse =
         withContext(Dispatchers.IO) {
-            val payload = buildPayload(config.deviceId, config.clientId, localIp)
+            val payload = buildPayload(deviceId, clientId, localIp)
             val request = Request.Builder()
-                .url(config.otaUrl)
-                .header("Device-Id", config.deviceId)
+                .url(otaUrl)
+                .header("Device-Id", deviceId)
                 .header("Content-Type", "application/json")
                 .post(gson.toJson(payload).toRequestBody(JSON_MEDIA_TYPE))
                 .build()

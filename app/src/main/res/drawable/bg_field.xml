@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .field-input 及其 :focus 态。
+  CSS 的 box-shadow: 0 0 0 3px 聚焦环无原生等价物，改为把描边加粗并换成主色。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/xz_radius_sm" />
+            <solid android:color="@color/xz_bg_input" />
+            <stroke
+                android:width="@dimen/xz_stroke_focus"
+                android:color="@color/xz_border_focus" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/xz_radius_sm" />
+            <solid android:color="@color/xz_bg_input" />
+            <stroke
+                android:width="@dimen/xz_stroke"
+                android:color="@color/xz_border_subtle" />
+        </shape>
+    </item>
+</selector>

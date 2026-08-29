@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .btn-primary { background: grad-user; radius-md }。angle 315 ≈ CSS 135deg -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/xz_radius_md" />
+    <gradient
+        android:angle="315"
+        android:endColor="@color/xz_grad_user_end"
+        android:startColor="@color/xz_grad_user_start"
+        android:type="linear" />
+</shape>

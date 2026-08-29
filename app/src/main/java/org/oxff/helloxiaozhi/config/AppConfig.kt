@@ -59,7 +59,13 @@ class AppConfig(context: Context) {
             return newId
         }
 
-    /** 设备 ID（MAC 格式，对应 config.py 的 DEVICE_ID），由 DeviceInfoProvider 生成后写入 */
+    /**
+     * 本机物理 MAC（对应 config.py 的 DEVICE_ID），由 DeviceInfoProvider 生成后写入。
+     *
+     * 注意语义：它是**默认机器人的身份**与新建机器人的 MAC 初始值，
+     * 并非「当前在线的 Device-Id」——握手实际使用的是当前激活机器人的 MAC，
+     * 见 XiaoZhiController.switchActiveBot 与 XiaoZhiWebSocket.connect(deviceId)。
+     */
     var deviceId: String
         get() = sp.getString(KEY_DEVICE_ID, null) ?: ""
         set(value) = sp.edit().putString(KEY_DEVICE_ID, value).apply()
@@ -67,4 +73,12 @@ class AppConfig(context: Context) {
     /** 是否为官方服务器直连模式（决定是否执行 OTA 注册与验证码激活流程） */
     fun isOfficialMode(): Boolean =
         wsUrl.trimEnd('/') == DEFAULT_WS_URL.trimEnd('/')
+
+    /**
+     * 清空全部配置，回到默认值（设置页「重置应用数据」）。
+     *
+     * clientId 与 deviceId 一并清除：两者都会在下次访问时重新生成，
+     * 从而真正回到「首次安装」状态。
+     */
+    fun clear() = sp.edit().clear().apply()
 }

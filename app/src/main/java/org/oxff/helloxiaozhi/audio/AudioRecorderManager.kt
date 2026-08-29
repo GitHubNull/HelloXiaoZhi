@@ -35,20 +35,23 @@ class AudioRecorderManager(
     private var zeroLevelCount = 0
 
     /**
-     * 软件增益（dB），用于补偿 MIC 源采集电平过低的问题。
-     * 参考 WebRTC AGC 核心思想：在发送端动态调整增益，确保输出电平稳定。
+     * 上行音频的用户增益（dB，相对基准），由通话页「你的增益」滑块设置。
      *
-     * 取值依据：
-     *  - VAD 说话阈值 THRESHOLD_SPEAKING = 0.04，MIC 源安静环境底噪约 0.001，
-     *    +12dB（约 4 倍线性增益）即可将正常语音电平（0.01~0.1）抬至阈值以上；
-     *  - 过高的增益（如 +24dB ≈ 16 倍）会使语音峰值（0.1~0.3）放大后超过 1.0
-     *    被截断为方波，频谱失真严重破坏 ASR 特征，且底噪同步放大导致 VAD 误判。
+     * 只作用于上行的音频帧，**不**作用于送给状态机的电平——电平用固定的
+     * [VAD_REFERENCE_GAIN_DB] 基准。若把用户增益同时作用于电平，滑到高位会让
+     * 呼吸声越过说话阈值导致状态机反复模态切换，滑到 0 会让电平恒为 0、
+     * 每 9 秒触发一次 VOICE_COMMUNICATION→MIC 的破坏性重建。
      */
-    private var gainDb = 12f
+    @Volatile
+    var micGainDb = 0f
 
-    /** 线性增益系数（由 gainDb 计算得出） */
-    private val gainFactor: Float
-        get() = Math.pow(10.0, gainDb / 20.0).toFloat()
+    /** 上行增益的线性系数 */
+    private val micGainFactor: Float
+        get() = Math.pow(10.0, micGainDb / 20.0).toFloat()
+
+    /** VAD 电平的固定基准增益（线性），与现有阈值调优所基于的 +12dB 一致 */
+    private val vadGainFactor: Float
+        get() = Math.pow(10.0, VAD_REFERENCE_GAIN_DB / 20.0).toFloat()
 
     /** 开始采集（新线程中执行，不阻塞调用方） */
     fun start() {
@@ -139,9 +142,11 @@ class AudioRecorderManager(
                     filled += copy
                     idx += copy
                     if (filled == OpusCodec.FRAME_SIZE) {
-                        // 应用软件增益：补偿 MIC 源采集电平过低
-                        val gainedFrame = applyGain(frame)
-                        val level = AudioMath.rmsLevel(gainedFrame)
+                        // 电平与上行解耦：电平用固定 VAD 基准增益（用户不可调，
+                        // 保证 VAD 阈值与零电平降级检测不受滑块影响），
+                        // 上行帧用用户增益（通话页「你的增益」滑块）
+                        val level = AudioMath.rmsLevel(frame) * vadGainFactor
+                        val gainedFrame = applyMicGain(frame)
                         frameCount++
                         // VOICE_COMMUNICATION 兜底检测：连续 150 帧电平为 0，降级回 MIC
                         // 注意：AI 播放期间 AEC 可能将输入当回声消除，导致电平为 0
@@ -256,14 +261,14 @@ class AudioRecorderManager(
     }
 
     /**
-     * 对 PCM 帧应用软件增益。
+     * 对上行 PCM 帧应用用户增益。
      *
-     * 增益公式：gain = 10^(gainDb/20)，采样值乘以增益后截断到 Int16 范围。
+     * 增益公式：gain = 10^(micGainDb/20)，采样值乘以增益后截断到 Int16 范围。
      * 参考 WebRTC AGC：在发送端动态调整增益，确保输出电平稳定。
      */
-    private fun applyGain(frame: ShortArray): ShortArray {
-        if (gainDb <= 0f) return frame.copyOf()
-        val gain = gainFactor
+    private fun applyMicGain(frame: ShortArray): ShortArray {
+        if (micGainDb == 0f) return frame.copyOf()
+        val gain = micGainFactor
         return ShortArray(frame.size) { i ->
             (frame[i] * gain).toInt().coerceIn(-32768, 32767).toShort()
         }
@@ -273,6 +278,16 @@ class AudioRecorderManager(
         const val TAG = "AudioRecorder"
         const val TARGET_SAMPLE_RATE = 16000
         const val FALLBACK_SAMPLE_RATE = 44100
+
+        /**
+         * VAD 电平的固定基准增益（dB），用户不可调。
+         *
+         * 取值依据：现有 VAD 阈值（THRESHOLD_SPEAKING=0.02 等）是在 +12dB
+         * 基准上调优的；MIC 源安静环境底噪约 0.001，+12dB（约 4 倍线性增益）
+         * 即可将正常语音电平（0.01~0.1）抬至阈值以上。保持该基准不变，
+         * 用户增益滑块在任何位置 VAD 行为都与调优时一致。
+         */
+        const val VAD_REFERENCE_GAIN_DB = 12f
     }
 }
 

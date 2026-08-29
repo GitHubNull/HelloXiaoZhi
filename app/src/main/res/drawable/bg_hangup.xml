@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 挂断按钮背景（圆形红色，对应 Web 端 hangup 按钮） -->
+<!-- .ctrl-btn.hangup .ctrl-icon { linear-gradient(145deg, #EF4444, #DC2626) } -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="#F43F5E" />
+    <gradient
+        android:angle="305"
+        android:endColor="@color/xz_hangup_end"
+        android:startColor="@color/xz_hangup_start"
+        android:type="linear" />
 </shape>

@@ -7,6 +7,7 @@ espressoCore = "3.6.1"
 rules = "1.6.1"
 appcompat = "1.7.0"
 material = "1.12.0"
+recyclerview = "1.3.2"
 kotlin = "2.2.0"
 okhttp = "4.12.0" # 最后支持 Android 5.0 (API 21) 的版本，勿升级 4.13+/5.x
 coroutines = "1.8.1"
@@ -20,6 +21,7 @@ androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .active-code / .mac-activate-code { bg-input + 1px dashed rgba(34,211,238,.35) }
+  注意：硬件加速下虚线描边可能被丢弃，使用该背景的 View 需设 layerType="software"。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/xz_radius_md" />
+    <solid android:color="@color/xz_bg_input" />
+    <stroke
+        android:width="@dimen/xz_stroke"
+        android:color="#5A22D3EE"
+        android:dashGap="3dp"
+        android:dashWidth="5dp" />
+</shape>

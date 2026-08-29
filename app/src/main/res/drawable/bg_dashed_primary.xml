@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .btn-add-bot { border: 1.5px dashed rgba(34,211,238,.35) }
+  注意：硬件加速下虚线描边可能被丢弃，使用该背景的 View 需设 layerType="software"。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/xz_radius_md" />
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="1.5dp"
+        android:color="#5A22D3EE"
+        android:dashGap="3dp"
+        android:dashWidth="5dp" />
+</shape>

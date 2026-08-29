@@ -1,27 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  设计令牌：逐条对应设计稿 assets/css/common.css 的 :root 变量。
+  CSS rgba() 的 alpha 换算为 Android #AARRGGBB 前缀：0.12 → 1F，0.15 → 26，0.25 → 40。
+-->
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- 背景层 -->
+    <color name="xz_bg_deep">#FF0B0F19</color>
+    <color name="xz_bg_card">#FF151B2E</color>
+    <color name="xz_bg_bubble_ai">#FF1E2740</color>
+    <color name="xz_bg_input">#FF1A2238</color>
 
-    <!-- 语音通话页（与 Web 端 VoiceCall.vue 配色一致） -->
-    <color name="call_background">#151414</color>
-    <color name="wave_bar">#FF4081</color>
-    <color name="ripple_stroke">#99FFFFFF</color>
+    <!--
+      backdrop-filter: blur() 在 API 21 无等价实现（RenderEffect 是 API 31）。
+      导航栏/Tab 栏/输入栏等毛玻璃层改用手工合成的不透明色。
+    -->
+    <color name="xz_bg_blur">#FF141A2B</color>
+    <color name="xz_scrim">#B8050710</color>
 
-    <!-- 聊天气泡 -->
-    <color name="bubble_user">#FF6200EE</color>
-    <color name="bubble_user_text">#FFFFFFFF</color>
-    <color name="bubble_ai">#F0F0F0</color>
-    <color name="bubble_ai_text">#212121</color>
-    <color name="time_text">#9E9E9E</color>
+    <!-- 主色与强调色 -->
+    <color name="xz_primary">#FF22D3EE</color>
+    <color name="xz_primary_dim">#2622D3EE</color>
+    <color name="xz_accent_ai">#FF818CF8</color>
 
-    <!-- 状态指示 -->
-    <color name="status_connected">#34C759</color>
-    <color name="status_disconnected">#9E9E9E</color>
-    <color name="status_error">#F43F5E</color>
+    <!-- grad-user: linear-gradient(135deg, #2563EB, #22D3EE) -->
+    <color name="xz_grad_user_start">#FF2563EB</color>
+    <color name="xz_grad_user_end">#FF22D3EE</color>
+
+    <!-- 语义色 -->
+    <color name="xz_success">#FF34D399</color>
+    <color name="xz_error">#FFF87171</color>
+    <color name="xz_warning">#FFFBBF24</color>
+
+    <!-- 文字 -->
+    <color name="xz_text_primary">#FFF1F5F9</color>
+    <color name="xz_text_secondary">#FF94A3B8</color>
+    <color name="xz_text_hint">#FF64748B</color>
+    <color name="xz_text_on_primary">#FFFFFFFF</color>
+
+    <!-- 描边与分隔线 -->
+    <color name="xz_border_subtle">#1F94A3B8</color>
+    <color name="xz_border_focus">#FF22D3EE</color>
+
+    <!-- 列表行按压态（对应 rgba(148,163,184,0.06/0.10)） -->
+    <color name="xz_row_pressed">#1A94A3B8</color>
+
+    <!-- 开关（.switch-track / .switch-thumb） -->
+    <color name="xz_switch_track_off">#4094A3B8</color>
+    <color name="xz_switch_track_on">#7322D3EE</color>
+    <color name="xz_switch_thumb_off">#FFCBD5E1</color>
+
+    <!-- 危险操作区（rgba(248,113,113,0.06/0.20/0.10/0.40)） -->
+    <color name="xz_danger_bg">#0FF87171</color>
+    <color name="xz_danger_border">#33F87171</color>
+    <color name="xz_danger_fill">#1AF87171</color>
+    <color name="xz_danger_stroke">#66F87171</color>
+
+    <!-- 挂断按钮渐变（linear-gradient(145deg, #EF4444, #DC2626)） -->
+    <color name="xz_hangup_start">#FFEF4444</color>
+    <color name="xz_hangup_end">#FFDC2626</color>
+
+    <!-- 连接状态灯：设计稿四态（index.js STATE_MAP） -->
+    <color name="xz_status_connected">#FF34D399</color>
+    <color name="xz_status_connecting">#FFFBBF24</color>
+    <color name="xz_status_disconnected">#FF64748B</color>
+    <color name="xz_status_error">#FFF87171</color>
+
+    <!-- 二进制星河（call.js 的常量色，集中在此便于调色） -->
+    <color name="xz_star_bg_top">#F5050A18</color>
+    <color name="xz_star_bg_mid">#F0080E20</color>
+    <color name="xz_star_bg_bottom">#F5040814</color>
+    <color name="xz_star_edge">#5A50B4E6</color>
+    <color name="xz_star_digit_head">#FF8CF0FF</color>
+    <color name="xz_star_digit_near">#FF46C8EB</color>
+    <color name="xz_star_digit_tail">#FF328CB4</color>
+    <color name="xz_star_ripple">#FF5ADCFA</color>
+    <color name="xz_ball_ai">#FF38BDF8</color>
+    <color name="xz_ball_user">#FF4ADE80</color>
+
+    <!-- 头像调色板：AvatarPalette 的 8 组渐变（add-bot-modal.js AVATAR_COLORS） -->
+    <color name="xz_avatar_0_start">#FF2563EB</color>
+    <color name="xz_avatar_0_end">#FF22D3EE</color>
+    <color name="xz_avatar_1_start">#FFF59E0B</color>
+    <color name="xz_avatar_1_end">#FFF97316</color>
+    <color name="xz_avatar_2_start">#FFEC4899</color>
+    <color name="xz_avatar_2_end">#FF8B5CF6</color>
+    <color name="xz_avatar_3_start">#FF10B981</color>
+    <color name="xz_avatar_3_end">#FF059669</color>
+    <color name="xz_avatar_4_start">#FFEF4444</color>
+    <color name="xz_avatar_4_end">#FFF97316</color>
+    <color name="xz_avatar_5_start">#FF8B5CF6</color>
+    <color name="xz_avatar_5_end">#FF6366F1</color>
+    <color name="xz_avatar_6_start">#FF14B8A6</color>
+    <color name="xz_avatar_6_end">#FF0D9488</color>
+    <color name="xz_avatar_7_start">#FFF43F5E</color>
+    <color name="xz_avatar_7_end">#FFEC4899</color>
 </resources>

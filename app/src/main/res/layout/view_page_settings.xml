@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置 Tab：服务器 / 认证 / 语音唤醒 / 设备信息 / 危险操作（对应设计稿 .settings-view） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/Xz.Text.SectionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/settings_title" />
+
+            <!-- 服务器配置 -->
+            <LinearLayout
+                style="@style/Xz.Card"
+                android:layout_marginTop="14dp">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_server" />
+
+                <TextView
+                    style="@style/Xz.Text.Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="7dp"
+                    android:text="@string/settings_ws_url" />
+
+                <EditText
+                    android:id="@+id/ws_url_edit"
+                    style="@style/Xz.Field"
+                    android:hint="wss://" />
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/settings_ws_url_hint" />
+
+                <TextView
+                    style="@style/Xz.Text.Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="7dp"
+                    android:text="@string/settings_ota_url" />
+
+                <EditText
+                    android:id="@+id/ota_url_edit"
+                    style="@style/Xz.Field"
+                    android:hint="https://" />
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/settings_ota_url_hint" />
+            </LinearLayout>
+
+            <!-- 认证配置 -->
+            <LinearLayout
+                style="@style/Xz.Card"
+                android:layout_marginTop="14dp">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_auth" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Xz.Text.LabelStrong"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_token_enable" />
+
+                        <TextView
+                            style="@style/Xz.Text.Hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_token_enable_hint" />
+                    </LinearLayout>
+
+                    <org.oxff.helloxiaozhi.ui.view.XzSwitch
+                        android:id="@+id/token_switch"
+                        android:layout_width="48dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/token_wrap"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        style="@style/Xz.Text.Label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="7dp"
+                        android:text="@string/settings_token" />
+
+                    <EditText
+                        android:id="@+id/token_edit"
+                        style="@style/Xz.Field"
+                        android:hint="@string/settings_token_hint" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 语音唤醒 -->
+            <LinearLayout
+                style="@style/Xz.Card"
+                android:layout_marginTop="14dp">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_wake" />
+
+                <TextView
+                    style="@style/Xz.Text.Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_wake_label" />
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="10dp"
+                    android:text="@string/settings_wake_hint" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/wake_target_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never" />
+            </LinearLayout>
+
+            <!-- 设备信息 -->
+            <LinearLayout
+                style="@style/Xz.Card"
+                android:layout_marginTop="14dp">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_device" />
+
+                <TextView
+                    style="@style/Xz.Text.Label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="7dp"
+                    android:text="@string/settings_device_id" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/device_id_edit"
+                        style="@style/Xz.Field"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:editable="false"
+                        android:focusable="false" />
+
+                    <ImageButton
+                        android:id="@+id/btn_copy"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="9dp"
+                        android:background="@drawable/bg_square_btn"
+                        android:contentDescription="@string/settings_copy_device_id"
+                        android:src="@drawable/ic_copy"
+                        android:tint="@color/xz_text_secondary" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="16dp"
+                    android:text="@string/settings_device_id_hint" />
+
+                <TextView
+                    android:id="@+id/btn_get_code"
+                    style="@style/Xz.Button.Ghost"
+                    android:text="@string/settings_get_code" />
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:text="@string/settings_get_code_hint" />
+            </LinearLayout>
+
+            <!-- 危险操作 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_card_danger"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/xz_card_padding_h"
+                android:paddingTop="@dimen/xz_card_padding_v"
+                android:paddingEnd="@dimen/xz_card_padding_h"
+                android:paddingBottom="@dimen/xz_card_padding_v">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_danger"
+                    android:textColor="@color/xz_error" />
+
+                <TextView
+                    android:id="@+id/btn_reset"
+                    style="@style/Xz.Button.Danger"
+                    android:text="@string/settings_reset" />
+
+                <TextView
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="@string/settings_reset_hint" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 底部保存按钮（对应设计稿 .settings-footer） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_bar_top_divider"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/btn_save"
+            style="@style/Xz.Button.Primary"
+            android:text="@string/settings_save" />
+    </LinearLayout>
+</LinearLayout>

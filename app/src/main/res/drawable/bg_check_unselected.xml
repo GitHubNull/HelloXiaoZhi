@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .wake-target-check 未选中态：22dp 空心圆 + 2px border-subtle 描边。
+  选中态在代码里换成 bg_check_selected。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="2dp"
+        android:color="@color/xz_border_subtle" />
+</shape>

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 通话页涟漪扩散圆圈（对应 Web 端 ripple-1/2/3） -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <solid android:color="#00000000" />
-    <stroke
-        android:width="2dp"
-        android:color="@color/ripple_stroke" />
-</shape>

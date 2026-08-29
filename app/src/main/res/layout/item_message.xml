@@ -1,37 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 聊天列表条目：气泡 + 时间；气泡左右对齐由代码按角色设置 gravity -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  消息气泡项（对应设计稿 .msg-row）。
+  根容器改为 LinearLayout 并在根上设 gravity，消除旧实现中
+  MessageAdapter 对 FrameLayout.LayoutParams 的强转崩溃。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingTop="4dp"
-    android:paddingBottom="4dp">
+    android:orientation="vertical"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp">
 
     <LinearLayout
         android:id="@+id/message_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="start"
         android:maxWidth="280dp"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/bubble_text"
+            style="@style/Xz.Text.Body"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingStart="14dp"
-            android:paddingTop="10dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="10dp"
-            android:textSize="16sp" />
+            android:paddingStart="15dp"
+            android:paddingTop="11dp"
+            android:paddingEnd="15dp"
+            android:paddingBottom="11dp" />
 
         <TextView
             android:id="@+id/time_text"
+            style="@style/Xz.Text.Time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
-            android:layout_marginTop="2dp"
-            android:layout_marginStart="6dp"
-            android:layout_marginEnd="6dp"
-            android:textColor="@color/time_text"
-            android:textSize="11sp" />
+            android:layout_marginTop="5dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
     </LinearLayout>
-</FrameLayout>
+</LinearLayout>

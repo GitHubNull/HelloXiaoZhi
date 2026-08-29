@@ -21,5 +21,5 @@ data class ChatMessage(
     val time: String,
 )
 
-/** WebSocket 连接状态（对应 Web 端 connectionStatus） */
-enum class ConnectionStatus { CONNECTED, DISCONNECTED, ERROR }
+/** WebSocket 连接状态（对应设计稿 index.js 的 STATE_MAP 四态） */
+enum class ConnectionStatus { CONNECTED, CONNECTING, DISCONNECTED, ERROR }

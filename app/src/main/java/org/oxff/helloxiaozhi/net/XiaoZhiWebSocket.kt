@@ -52,6 +52,15 @@ class XiaoZhiWebSocket(
 
     private var webSocket: WebSocket? = null
 
+    /**
+     * 本次连接（含其自动重连）所用的设备身份。
+     *
+     * 在 [connect] 时钉住，而不是每次从 config 实时读：每个机器人是独立设备身份，
+     * 切换机器人时若排队中的重连任务读到了新 MAC，会用错误身份重连。
+     */
+    @Volatile
+    private var deviceId: String = ""
+
     /** 断开后是否自动重连（disconnect() 时置 false，对应 Web 端 disconnect） */
     @Volatile
     private var autoReconnect = false
@@ -60,10 +69,15 @@ class XiaoZhiWebSocket(
     private var reconnectScheduled = false
 
     private val reconnectHandler = Handler(Looper.getMainLooper())
-    private val reconnectRunnable = Runnable { connect() }
+    private val reconnectRunnable = Runnable { connectInternal() }
 
     /** 建立连接；已连接时为空操作 */
-    fun connect() {
+    fun connect(deviceId: String) {
+        this.deviceId = deviceId
+        connectInternal()
+    }
+
+    private fun connectInternal() {
         if (webSocket != null) return
         // 本次连接（无论主动或由重连任务触发）接管后，清除遗留的重连任务
         reconnectHandler.removeCallbacks(reconnectRunnable)
@@ -71,7 +85,7 @@ class XiaoZhiWebSocket(
 
         val builder = Request.Builder()
             .url(config.wsUrl)
-            .header("Device-Id", config.deviceId)
+            .header("Device-Id", deviceId)
             .header("Client-Id", config.clientId)
             .header("Protocol-Version", "1")
         if (config.tokenEnable) {

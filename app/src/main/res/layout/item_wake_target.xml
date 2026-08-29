@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 唤醒目标选择项（对应设计稿 .wake-target-row） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
+
+    <TextView
+        android:id="@+id/wake_avatar"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:gravity="center"
+        android:textColor="@color/xz_text_on_primary"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/wake_name"
+        style="@style/Xz.Text.ItemTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:textSize="14sp" />
+
+    <FrameLayout
+        android:id="@+id/wake_check"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:background="@drawable/bg_check_unselected">
+
+        <ImageView
+            android:id="@+id/wake_check_icon"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_check"
+            android:tint="@color/xz_text_on_primary"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

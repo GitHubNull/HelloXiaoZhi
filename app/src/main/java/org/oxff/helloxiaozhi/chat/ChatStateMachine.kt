@@ -121,6 +121,12 @@ class ChatStateMachine(
      */
     var logger: ((String) -> Unit)? = null
 
+    /**
+     * 状态真正切换后的通知（在 uiExecutor 线程触发，同态 setState 不触发）。
+     * 通话页的星河双球动画由它驱动。
+     */
+    var onStateChanged: ((ChatState) -> Unit)? = null
+
     /** 处理一帧音频电平（可在任意线程调用，内部切换到 uiExecutor） */
     fun handleAudioLevel(level: Float, frame: ShortArray) {
         uiExecutor.post { dispatch(level, frame) }
@@ -239,6 +245,7 @@ class ChatStateMachine(
             }
             ChatState.AI_SPEAKING -> callbacks.onEvent(ChatEvent.AI_START_SPEAKING)
         }
+        onStateChanged?.invoke(newState)
     }
 
     private fun exitUserSpeaking() {

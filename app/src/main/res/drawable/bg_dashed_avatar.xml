@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .modal-avatar-preview { border: 2px dashed rgba(148,163,184,.3); radius 18dp }
+  注意：硬件加速下虚线描边可能被丢弃，使用该背景的 View 需设 layerType="software"。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="18dp" />
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="2dp"
+        android:color="#4D94A3B8"
+        android:dashGap="3dp"
+        android:dashWidth="5dp" />
+</shape>

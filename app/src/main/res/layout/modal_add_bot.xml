@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 添加机器人模态框（对应设计稿 #add-bot-modal） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_modal"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- 可点击的头像预览（点击弹出颜色选择） -->
+    <FrameLayout
+        android:id="@+id/modal_avatar_preview"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_dashed_avatar">
+
+        <TextView
+            android:id="@+id/avatar_preview_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/add_bot_avatar_placeholder"
+            android:textColor="@color/xz_text_on_primary"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="-6dp"
+            android:layout_marginEnd="-6dp"
+            android:background="@drawable/bg_icon_btn"
+            android:padding="5dp"
+            android:src="@drawable/ic_edit"
+            android:tint="@color/xz_text_hint" />
+    </FrameLayout>
+
+    <!-- 头像颜色选择弹出层（默认隐藏，点击预览弹出） -->
+    <LinearLayout
+        android:id="@+id/avatar_popup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_card"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <TextView
+            style="@style/Xz.Text.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center"
+            android:text="@string/add_bot_avatar_title" />
+
+        <GridLayout
+            android:id="@+id/avatar_popup_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="4"
+            android:rowCount="2" />
+    </LinearLayout>
+
+    <TextView
+        style="@style/Xz.Text.ModalTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:text="@string/add_bot_title" />
+
+    <TextView
+        style="@style/Xz.Text.Hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/add_bot_desc" />
+
+    <!-- 表单 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical">
+
+        <!-- MAC 地址 -->
+        <TextView
+            style="@style/Xz.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="7dp"
+            android:text="@string/add_bot_mac_label" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/new_bot_mac"
+                style="@style/Xz.Field"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:hint="@string/add_bot_mac_hint"
+                android:textSize="12sp" />
+
+            <ImageButton
+                android:id="@+id/btn_regen_mac"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="9dp"
+                android:background="@drawable/bg_square_btn"
+                android:contentDescription="@string/add_bot_mac_regen"
+                android:src="@drawable/ic_refresh"
+                android:tint="@color/xz_text_secondary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/mac_source_tag"
+                style="@style/Xz.Text.Pill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_pill_success"
+                android:text="@string/add_bot_mac_source_auto"
+                android:textColor="@color/xz_success" />
+
+            <TextView
+                style="@style/Xz.Text.Hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/add_bot_mac_note" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/btn_get_mac_code"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_square_btn"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="@string/add_bot_get_code"
+            android:textColor="@color/xz_primary"
+            android:textSize="12sp" />
+
+        <!-- MAC 激活码面板（默认收起） -->
+        <LinearLayout
+            android:id="@+id/mac_activate_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/mac_activate_code"
+                style="@style/Xz.Text.MacCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_code_box"
+                android:padding="12dp"
+                android:text="@string/add_bot_code_placeholder" />
+
+            <TextView
+                style="@style/Xz.Text.Hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/add_bot_code_hint" />
+        </LinearLayout>
+
+        <!-- 名称 -->
+        <TextView
+            style="@style/Xz.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="7dp"
+            android:text="@string/add_bot_name_label" />
+
+        <EditText
+            android:id="@+id/new_bot_name"
+            style="@style/Xz.Field.Sans"
+            android:hint="@string/add_bot_name_hint"
+            android:maxLength="8" />
+
+        <!-- 性格标签 -->
+        <TextView
+            style="@style/Xz.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="7dp"
+            android:text="@string/add_bot_tags_label" />
+
+        <EditText
+            android:id="@+id/new_bot_tags"
+            style="@style/Xz.Field.Sans"
+            android:hint="@string/add_bot_tags_hint" />
+
+        <!-- 简短介绍 -->
+        <TextView
+            style="@style/Xz.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="7dp"
+            android:text="@string/add_bot_desc_label" />
+
+        <EditText
+            android:id="@+id/new_bot_desc"
+            style="@style/Xz.Field.Sans"
+            android:layout_height="72dp"
+            android:gravity="top"
+            android:hint="@string/add_bot_desc_hint"
+            android:maxLength="60"
+            android:padding="10dp"
+            android:singleLine="false" />
+    </LinearLayout>
+
+    <!-- 操作按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/btn_confirm_add"
+            style="@style/Xz.Button.Primary"
+            android:text="@string/add_bot_confirm" />
+
+        <TextView
+            android:id="@+id/btn_cancel_add"
+            style="@style/Xz.Button.Ghost"
+            android:layout_marginTop="10dp"
+            android:text="@string/action_cancel" />
+    </LinearLayout>
+</LinearLayout>

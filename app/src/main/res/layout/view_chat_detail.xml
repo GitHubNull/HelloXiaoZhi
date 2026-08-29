@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 对话详情滑入层（对应设计稿 .chat-detail-view） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/xz_bg_deep"
+    android:orientation="vertical">
+
+    <!-- 顶部导航：返回 + 机器人名 + 状态 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_bar_bottom_divider"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="12dp">
+
+        <ImageButton
+            android:id="@+id/btn_back_chat"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/bg_icon_btn"
+            android:contentDescription="@string/action_back"
+            android:src="@drawable/ic_back"
+            android:tint="@color/xz_text_secondary" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/detail_bot_name"
+                style="@style/Xz.Text.ItemTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/detail_bot_status"
+                style="@style/Xz.Text.Hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 消息列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/msg_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="14dp" />
+
+    <!-- 输入栏（对应设计稿 .input-bar） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_bar_top_divider"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="14dp">
+
+        <ImageButton
+            android:id="@+id/btn_call"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/bg_icon_btn_outline"
+            android:contentDescription="@string/action_call"
+            android:src="@drawable/ic_call"
+            android:tint="@color/xz_primary" />
+
+        <EditText
+            android:id="@+id/msg_input"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="9dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_field"
+            android:hint="@string/input_hint"
+            android:imeOptions="actionSend"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:singleLine="true"
+            android:textColor="@color/xz_text_primary"
+            android:textColorHint="@color/xz_text_hint"
+            android:textSize="14sp" />
+
+        <ImageButton
+            android:id="@+id/btn_send"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="9dp"
+            android:background="@drawable/bg_btn_send"
+            android:contentDescription="@string/action_send"
+            android:src="@drawable/ic_send"
+            android:tint="@color/xz_text_on_primary" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .btn-send { 圆形; background: grad-user } -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:angle="315"
+        android:endColor="@color/xz_grad_user_end"
+        android:startColor="@color/xz_grad_user_start"
+        android:type="linear" />
+</shape>

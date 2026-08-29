@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .empty-action { 透明底 + 1px primary; border-radius: 999px }
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/xz_radius_pill" />
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="@dimen/xz_stroke"
+        android:color="@color/xz_primary" />
+</shape>

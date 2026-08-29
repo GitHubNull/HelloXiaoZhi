@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  .nav-bar / .chat-detail-nav 的底部分隔线。
+  shape 无法只画一侧描边，用 layer-list：底层铺分隔线色，上层用 1dp 底部 inset 盖住其余部分。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/xz_border_subtle" />
+        </shape>
+    </item>
+    <item android:bottom="@dimen/xz_stroke">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/xz_bg_blur" />
+        </shape>
+    </item>
+</layer-list>

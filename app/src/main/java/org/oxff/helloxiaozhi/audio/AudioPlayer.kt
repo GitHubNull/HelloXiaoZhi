@@ -23,6 +23,15 @@ class AudioPlayer {
     /** 队列播空回调（用于状态机回退到 IDLE）；在播放线程触发 */
     var onQueueEmpty: (() -> Unit)? = null
 
+    /**
+     * AI 播放音量（线性倍数，1.0 为原始音量）。
+     *
+     * 不能用 AudioTrack.setVolume：它封顶 1.0 且本类用 USAGE_VOICE_COMMUNICATION，
+     * 走系统音量会全局改动通话音量。软件乘法在写入前对 PCM 做缩放，可超过 1.0。
+     */
+    @Volatile
+    var playbackGain = 1.0f
+
     private val queue = ConcurrentLinkedQueue<ShortArray>()
     private val lock = Object()
 
@@ -186,10 +195,22 @@ class AudioPlayer {
      *
      * 阻塞式 write 在 AudioTrack 因 underrun 被系统禁用后可能抛出异常，
      * 由调用方重建 track。
+     *
+     * 播放增益写入新数组而非原地缩放：playbackLoop 是 peek 后写、失败则
+     * recreateTrack 后重写同一数组，且 enqueue 按引用存入调用方数组——
+     * 原地缩放会在重试时重复施加增益并污染其它持有者。
      */
     private fun writeChunkBlocking(t: AudioTrack, chunk: ShortArray): Boolean {
+        val gain = playbackGain
+        val out = if (gain == 1.0f) {
+            chunk
+        } else {
+            ShortArray(chunk.size) { i ->
+                (chunk[i] * gain).toInt().coerceIn(-32768, 32767).toShort()
+            }
+        }
         return try {
-            t.write(chunk, 0, chunk.size)
+            t.write(out, 0, out.size)
             true
         } catch (_: Exception) {
             false

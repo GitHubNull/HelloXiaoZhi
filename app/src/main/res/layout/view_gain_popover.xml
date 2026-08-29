@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 增益弹出层（对应设计稿 .gain-popover）：标题 + 垂直滑块 + 百分比 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_gain_popover"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/gain_pop_title"
+        style="@style/Xz.Text.Hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <!--
+      垂直滑块：把水平 SeekBar 旋转 -90° 实现（对应设计稿 transform: rotate(-90deg)）。
+      用固定宽度容器 + 旋转，避免自定义 View 的触摸坐标换算。
+    -->
+    <FrameLayout
+        android:layout_width="44dp"
+        android:layout_height="110dp"
+        android:layout_marginTop="10dp">
+
+        <SeekBar
+            android:id="@+id/gain_slider"
+            android:layout_width="110dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:max="100"
+            android:progress="70"
+            android:rotation="-90" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/gain_value"
+        style="@style/Xz.Text.Mono"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="@color/xz_text_primary"
+        android:textSize="12sp" />
+</LinearLayout>

@@ -294,6 +294,48 @@ class ChatStateMachineTest {
         assertEquals(messageCount, callbacks.textMessages.size)
     }
 
+    // ---------------- onStateChanged 钩子（通话页星河动画的数据源） ----------------
+
+    @Test
+    fun `状态迁移时 onStateChanged 恰好触发一次`() {
+        createMachine()
+        val states = mutableListOf<ChatState>()
+        machine.onStateChanged = { states.add(it) }
+
+        machine.setState(ChatState.USER_SPEAKING)
+        machine.setState(ChatState.AI_SPEAKING)
+        machine.setState(ChatState.IDLE)
+
+        assertEquals(
+            listOf(ChatState.USER_SPEAKING, ChatState.AI_SPEAKING, ChatState.IDLE),
+            states,
+        )
+    }
+
+    @Test
+    fun `同态 setState 不触发 onStateChanged`() {
+        createMachine()
+        machine.setState(ChatState.USER_SPEAKING)
+        var count = 0
+        machine.onStateChanged = { count++ }
+
+        machine.setState(ChatState.USER_SPEAKING)
+        machine.setState(ChatState.USER_SPEAKING)
+
+        assertEquals(0, count)
+    }
+
+    @Test
+    fun `电平驱动的迁移同样触发 onStateChanged`() {
+        createMachine()
+        val states = mutableListOf<ChatState>()
+        machine.onStateChanged = { states.add(it) }
+
+        repeat(3) { machine.handleAudioLevel(0.05f, frame(0.05f)) }
+
+        assertEquals(listOf(ChatState.USER_SPEAKING), states)
+    }
+
     private companion object {
         const val SESSION_ID = "test-session"
     }

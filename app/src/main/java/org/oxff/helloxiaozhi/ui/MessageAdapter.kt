@@ -4,30 +4,33 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import org.oxff.helloxiaozhi.R
-import org.oxff.helloxiaozhi.chat.ChatMessage
 import org.oxff.helloxiaozhi.chat.ChatRole
+import org.oxff.helloxiaozhi.data.StoredMessage
+import org.oxff.helloxiaozhi.ui.view.BubbleDrawables
+import org.oxff.helloxiaozhi.util.TimeFormat
 
 /**
- * 聊天列表适配器（对应 Web 端 ChatContainer.vue）：
- * 用户消息右对齐紫色气泡，AI 消息左对齐灰色气泡。
+ * 消息气泡适配器（对应设计稿 chat-detail.js 的 appendMsg）。
+ *
+ * 数据源是 [StoredMessage]（含 ts），时间串由 TimeFormat 现算。
+ * 用户消息右对齐渐变气泡，AI 消息左对齐深色气泡。
  */
 class MessageAdapter : RecyclerView.Adapter<MessageAdapter.MessageHolder>() {
 
-    private val items = mutableListOf<ChatMessage>()
+    private val items = mutableListOf<StoredMessage>()
 
-    fun submit(list: List<ChatMessage>) {
+    fun submit(list: List<StoredMessage>) {
         items.clear()
         items.addAll(list)
         notifyDataSetChanged()
     }
 
-    fun add(message: ChatMessage) {
+    fun add(message: StoredMessage) {
         items.add(message)
         notifyItemInserted(items.size - 1)
     }
@@ -49,27 +52,25 @@ class MessageAdapter : RecyclerView.Adapter<MessageAdapter.MessageHolder>() {
 
     inner class MessageHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
-        // message_container 在 item_message.xml 中是 LinearLayout
-        // （其父容器 FrameLayout 会为其分配 FrameLayout.LayoutParams）
         private val container = itemView.findViewById<LinearLayout>(R.id.message_container)
         private val bubble = itemView.findViewById<TextView>(R.id.bubble_text)
         private val time = itemView.findViewById<TextView>(R.id.time_text)
 
-        fun bind(message: ChatMessage) {
+        fun bind(message: StoredMessage) {
             bubble.text = message.content
-            time.text = message.time
+            time.text = TimeFormat.hhmm(message.ts)
             val isUser = message.role == ChatRole.USER
-            val lp = container.layoutParams as FrameLayout.LayoutParams
-            lp.gravity = if (isUser) Gravity.END else Gravity.START
-            container.layoutParams = lp
+            // 在根容器上设 gravity，不再强转 FrameLayout.LayoutParams
+            (container.layoutParams as LinearLayout.LayoutParams).gravity =
+                if (isUser) Gravity.END else Gravity.START
 
             val context = itemView.context
             if (isUser) {
-                bubble.setBackgroundResource(R.drawable.bg_user_bubble)
-                bubble.setTextColor(ContextCompat.getColor(context, R.color.bubble_user_text))
+                bubble.background = BubbleDrawables.chatUser(context)
+                bubble.setTextColor(ContextCompat.getColor(context, R.color.xz_text_on_primary))
             } else {
-                bubble.setBackgroundResource(R.drawable.bg_ai_bubble)
-                bubble.setTextColor(ContextCompat.getColor(context, R.color.bubble_ai_text))
+                bubble.background = BubbleDrawables.chatAi(context)
+                bubble.setTextColor(ContextCompat.getColor(context, R.color.xz_text_primary))
             }
         }
     }

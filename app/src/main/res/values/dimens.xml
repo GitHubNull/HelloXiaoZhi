@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 尺寸令牌：对应设计稿 common.css 的 radius-* 与各处复用的固定尺寸 -->
+<resources>
+    <!-- 圆角 -->
+    <dimen name="xz_radius_lg">24dp</dimen>
+    <dimen name="xz_radius_md">16dp</dimen>
+    <dimen name="xz_radius_sm">10dp</dimen>
+    <dimen name="xz_radius_pill">999dp</dimen>
+    <dimen name="xz_radius_avatar">14dp</dimen>
+
+    <!-- 描边 -->
+    <dimen name="xz_stroke">1dp</dimen>
+    <dimen name="xz_stroke_focus">2dp</dimen>
+
+    <!-- 头像 -->
+    <dimen name="xz_avatar_lg">48dp</dimen>
+    <dimen name="xz_avatar_md">36dp</dimen>
+    <dimen name="xz_avatar_xl">64dp</dimen>
+
+    <!-- 控件 -->
+    <dimen name="xz_icon_btn">42dp</dimen>
+    <dimen name="xz_field_height">44dp</dimen>
+    <dimen name="xz_ctrl_icon">44dp</dimen>
+    <dimen name="xz_hangup_size">58dp</dimen>
+    <dimen name="xz_switch_width">48dp</dimen>
+    <dimen name="xz_switch_height">28dp</dimen>
+    <dimen name="xz_switch_thumb">20dp</dimen>
+
+    <!-- 间距 -->
+    <dimen name="xz_gutter">18dp</dimen>
+    <dimen name="xz_gutter_sm">14dp</dimen>
+    <dimen name="xz_card_padding_h">16dp</dimen>
+    <dimen name="xz_card_padding_v">18dp</dimen>
+
+    <!--
+      targetSdk 27 下没有 WindowInsets / display cutout API，
+      env(safe-area-inset-bottom) 无等价物，底部用固定内边距兜底。
+    -->
+    <dimen name="xz_safe_bottom">14dp</dimen>
+
+    <!-- 星河画布高度（#pool-canvas { height: 170px }） -->
+    <dimen name="xz_starfield_height">170dp</dimen>
+</resources>

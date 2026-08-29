@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 确认重置模态框（对应设计稿 #reset-modal） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_modal"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <FrameLayout
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_modal_icon_danger">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_warning"
+            android:tint="@color/xz_error" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/confirm_title"
+        style="@style/Xz.Text.ModalTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/reset_title" />
+
+    <TextView
+        android:id="@+id/confirm_desc"
+        style="@style/Xz.Text.Hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/reset_desc" />
+
+    <TextView
+        android:id="@+id/btn_confirm_reset"
+        style="@style/Xz.Button.Danger"
+        android:layout_marginTop="20dp"
+        android:text="@string/reset_confirm" />
+
+    <TextView
+        android:id="@+id/btn_cancel_reset"
+        style="@style/Xz.Button.Ghost"
+        android:layout_marginTop="10dp"
+        android:text="@string/action_cancel" />
+</LinearLayout>
