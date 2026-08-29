@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.3] - 2026-08-29
+
+### Fixed
+
+- 修复底部 Tab 栏角标多位数字被裁剪：`view_tab_bar.xml` 图标容器由固定 24dp 改为自适应生长（`wrap_content` + `minWidth/minHeight 24dp`），图标 `layout_gravity=center` 保持居中
+
 ## [0.3.2] - 2026-08-29
 
 ### Fixed

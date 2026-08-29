@@ -18,14 +18,18 @@
         android:paddingBottom="6dp"
         android:background="?attr/selectableItemBackground">
 
+        <!-- 容器随角标自适应生长（无角标时仍为 24dp），避免角标多位数字被测量钳制/裁剪 -->
         <FrameLayout
-            android:layout_width="24dp"
-            android:layout_height="24dp">
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="24dp"
+            android:minHeight="24dp">
 
             <ImageView
                 android:id="@+id/tab_chat_icon"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
+                android:layout_gravity="center"
                 android:src="@drawable/ic_tab_chat"
                 android:tint="@color/xz_text_hint" />
 
