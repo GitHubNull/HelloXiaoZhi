@@ -123,8 +123,22 @@ class AddBotModal(
 
     private fun renderAvatarGrid() {
         avatarGrid.removeAllViews()
-        val size = (52 * context.resources.displayMetrics.density).toInt()
-        val margin = (5 * context.resources.displayMetrics.density).toInt()
+        val density = context.resources.displayMetrics.density
+        val margin = (5 * density).toInt()
+        // 模态卡片已布局、root.width 有效：减去卡片与弹出层 padding 得到网格可用宽度，
+        // 窄屏等比收缩避免最右列被裁切；宽屏钉在 248dp 上限（4 列 × (52 + 5×2)dp），
+        // 配合 XML 的 center_horizontal 在收窄后居中。
+        val available = root.width - root.paddingLeft - root.paddingRight -
+            avatarPopup.paddingLeft - avatarPopup.paddingRight
+        val gridWidth = if (available > 0) {
+            minOf((248 * density).toInt(), available)
+        } else {
+            (248 * density).toInt()
+        }
+        avatarGrid.layoutParams = (avatarGrid.layoutParams as LinearLayout.LayoutParams).apply {
+            width = gridWidth
+        }
+        val size = (gridWidth - 8 * margin) / 4
         for (i in 0 until AvatarPalette.SIZE) {
             val option = TextView(context).apply {
                 text = avatarPreviewText.text
@@ -155,6 +169,7 @@ class AddBotModal(
                     avatarPopup.postDelayed({ avatarPopup.visibility = View.GONE }, 300)
                 }
             }
+            // 单元格尺寸由网格宽度直接算出，保证正方形且不溢出。
             val lp = GridLayout.LayoutParams().apply {
                 width = size
                 height = size
