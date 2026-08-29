@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -179,6 +180,12 @@ class MainActivity : AppCompatActivity() {
     // ---------------- Tab 切换 ----------------
 
     private fun switchTab(tab: Tab) {
+        // 详情页是内容区最上层的不透明覆盖层：不先关闭的话，切换后的新页面会被它遮挡，
+        // 用户感知为「Tab 点击无响应」。详情页打开时点击当前 Tab 也执行关闭，回到该 Tab 列表。
+        if (chatDetail.isOpen) {
+            chatDetail.close()
+            hideIme()
+        }
         if (currentTab == tab) return
         currentTab = tab
 
@@ -210,6 +217,13 @@ class MainActivity : AppCompatActivity() {
         setTab(R.id.tab_chat, R.id.tab_chat_icon, R.id.tab_chat_label, currentTab == Tab.CHAT)
         setTab(R.id.tab_contacts, R.id.tab_contacts_icon, R.id.tab_contacts_label, currentTab == Tab.CONTACTS)
         setTab(R.id.tab_settings, R.id.tab_settings_icon, R.id.tab_settings_label, currentTab == Tab.SETTINGS)
+    }
+
+    /** 收起软键盘（详情页输入框可能持有焦点，关闭详情后键盘会残留） */
+    private fun hideIme() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
+        val token = (currentFocus ?: window.decorView).windowToken
+        imm.hideSoftInputFromWindow(token, 0)
     }
 
     // ---------------- 状态与渲染 ----------------
