@@ -1,0 +1,75 @@
+[
+  {
+    "name": "standard_001_nihao",
+    "description": "合成语音「你好」（句首轻声强度 0.8）",
+    "audio_file": "audio/standard/standard_001_nihao.wav",
+    "expected_text": "你好",
+    "duration_ms": 1960,
+    "tags": [
+      "basic",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  },
+  {
+    "name": "standard_002_tianqi",
+    "description": "合成语音「今天天气怎么样」（句首轻声强度 1.0）",
+    "audio_file": "audio/standard/standard_002_tianqi.wav",
+    "expected_text": "今天天气怎么样",
+    "duration_ms": 3260,
+    "tags": [
+      "basic",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  },
+  {
+    "name": "standard_003_question",
+    "description": "合成语音「我想问一下附近有什么好吃的」（句首轻声强度 1.0）",
+    "audio_file": "audio/standard/standard_003_question.wav",
+    "expected_text": "我想问一下附近有什么好吃的",
+    "duration_ms": 4820,
+    "tags": [
+      "basic",
+      "long",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  },
+  {
+    "name": "softness_001_nihao_040",
+    "description": "合成语音「你好」（句首轻声强度 0.4）",
+    "audio_file": "audio/chinese_softness/softness_001_nihao_040.wav",
+    "expected_text": "你好",
+    "duration_ms": 1960,
+    "tags": [
+      "softness",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  },
+  {
+    "name": "softness_002_jintian_035",
+    "description": "合成语音「今天天气怎么样」（句首轻声强度 0.35）",
+    "audio_file": "audio/chinese_softness/softness_002_jintian_035.wav",
+    "expected_text": "今天天气怎么样",
+    "duration_ms": 3260,
+    "tags": [
+      "softness",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  },
+  {
+    "name": "softness_003_woshuo_030",
+    "description": "合成语音「我说的对吗」（句首轻声强度 0.3）",
+    "audio_file": "audio/chinese_softness/softness_003_woshuo_030.wav",
+    "expected_text": "我说的对吗",
+    "duration_ms": 2740,
+    "tags": [
+      "softness",
+      "synthetic"
+    ],
+    "source": "synthetic"
+  }
+]

@@ -4,6 +4,21 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-08-29
+
+### Added
+
+- ASR 测试评估体系（非侵入，仅测试入口）：`MockAsrServer` 模拟小智 WebSocket 服务器、`MetricsEngine` 评分引擎、`BottleneckAnalyzer` 瓶颈分析、`AudioFingerprint` 指纹比对、`ChineseSpeechSynthesizer` 中文语音合成、`SubtitleParser` 字幕解析、`VirtualAudioSource` 虚拟音频源
+- 7 个评估测试套件：基础功能 / 中文轻声 / 打断 / 噪声鲁棒 / 真实语音 / 压力 / VAD 边界（`app/src/test/java/org/oxff/helloxiaozhi/asr/`）
+- Gradle 任务：`gradlew asrTest` 只运行 ASR 评估测试（常规 test 不受影响）；`asrFetchResources` 从开放平台下载真实音频（uv 虚拟环境）
+- 测试音频资源与用例：合成音频（标准/中文轻声）、真实访谈片段（含字幕）、synthetic/real_world 测试用例 JSON
+- `tools/asr/` Python 工具链：真实资源抓取（B 站）、字幕对齐、合成音频生成、会话提取（附 README 与 requirements.txt）
+
+### Changed
+
+- `gradle.properties` 钉住 JDK 21 工具链（`auto-detect=false` + `java.home`），命令行构建无需再传 `-D` 参数
+- 新增 mockwebserver 测试依赖（版本对齐 okhttp 4.12.0）；`.gitignore` 排除 ASR 会话凭证、报告、下载中间产物与 `.venv-asr/`
+
 ## [0.2.2] - 2026-08-29
 
 ### Fixed

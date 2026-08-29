@@ -32,10 +32,19 @@ __pycache__/
 *$py.class
 venv/
 .venv/
+.venv-asr/
 env/
 .env
 .env.*
 !.env.example
+
+# ================ ASR 测试评估体系 ================
+# B 站会话凭证（敏感信息，禁止入库）
+tools/asr/bilibili_session.json
+# ASR 测试报告输出（本地生成）
+app/src/test/resources/asr/reports/
+# 真实音频下载中间产物（含 cookies 等敏感文件，片段产物保留入库）
+app/src/test/resources/asr/audio/real_world/_downloads/
 
 # ================ Node.js / 前端 ================
 node_modules/

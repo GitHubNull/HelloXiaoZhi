@@ -1,0 +1,30 @@
+[
+  {
+    "name": "访谈_片段01",
+    "description": "真实语音片段（来自 interview_001）",
+    "audio_file": "audio/real_world/interview/interview_001_访谈_片段01.wav",
+    "subtitle_file": "app\\src\\test\\resources\\asr\\audio\\real_world\\interview\\interview_001.srt",
+    "expected_text": "应该对全世界道歉否则他会将日本带上一条重蹈历史覆辙的死路最近石破茂突然频繁诈尸屡次针对高市早苗发言一次比一次激烈",
+    "start_ms": 0,
+    "duration_ms": 8000,
+    "tags": [
+      "interview",
+      "interview_001",
+      "real_world"
+    ]
+  },
+  {
+    "name": "访谈_片段02",
+    "description": "真实语音片段（来自 interview_001）",
+    "audio_file": "audio/real_world/interview/interview_001_访谈_片段02.wav",
+    "subtitle_file": "app\\src\\test\\resources\\asr\\audio\\real_world\\interview\\interview_001.srt",
+    "expected_text": "逐步降低海外债券也就是美债的比例更要命的是GPF是全球养老基金的风向标它一动后面大批机构都会跟着重新评估美债的风险",
+    "start_ms": 0,
+    "duration_ms": 8000,
+    "tags": [
+      "interview",
+      "interview_001",
+      "real_world"
+    ]
+  }
+]
