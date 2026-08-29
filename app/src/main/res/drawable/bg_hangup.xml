@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- .ctrl-btn.hangup .ctrl-icon { linear-gradient(145deg, #EF4444, #DC2626) } -->
+<!-- 注意：Android 8.0 及以下要求 angle 为 45 的倍数，305 已按约束取整为 315，勿改回 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
     <gradient
-        android:angle="305"
+        android:angle="315"
         android:endColor="@color/xz_hangup_end"
         android:startColor="@color/xz_hangup_start"
         android:type="linear" />

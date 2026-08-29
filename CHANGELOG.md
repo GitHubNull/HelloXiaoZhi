@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.2] - 2026-08-29
+
+### Fixed
+
+- 修复通话页挂断按钮渐变角度不兼容：`bg_hangup.xml` 渐变 `angle` 由 305 修正为 315（Android 8.0 及以下要求 angle 为 45 的倍数，305 会导致渐变渲染异常），并加注释防止改回
+
 ## [0.3.1] - 2026-08-29
 
 ### Fixed
