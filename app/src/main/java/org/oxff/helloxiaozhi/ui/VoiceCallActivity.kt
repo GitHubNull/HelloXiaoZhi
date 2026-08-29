@@ -173,13 +173,14 @@ class VoiceCallActivity : AppCompatActivity() {
     // ---------------- 通话状态与动画 ----------------
 
     private fun startCall() {
-        // 对应设计稿 call.js：1.2s 后接通
+        // 对应设计稿 call.js：1.2s 后接通；计时器必须在 callStarted 置位后才启动，
+        // 否则首次执行命中 if (!callStarted) return 后不再自我投递，计时链永久中断（显示恒为 0）
         mainHandler.postDelayed({
             callStarted = true
             toastHost.show(getString(R.string.call_connected), ToastHost.Kind.SUCCESS, 1500)
             updateCallState(controller.chatState)
+            mainHandler.postDelayed(timerRunnable, 1000)
         }, 1200)
-        mainHandler.postDelayed(timerRunnable, 1000)
     }
 
     private fun updateCallState(state: ChatState) {

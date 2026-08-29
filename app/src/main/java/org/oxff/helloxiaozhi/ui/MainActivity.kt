@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         bindModals()
         bindController()
         bindTabs()
+        bindRepository()
 
         // 首次启动：默认打开唤醒目标机器人的对话
         repository.defaultBot()?.let { chatDetail.open(it.id) }
@@ -84,6 +85,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // 先解绑再销毁：repository 是应用级单例，持有本页回调会泄漏 Activity
+        repository.onDataChanged = null
         unbindController()
         super.onDestroy()
     }
@@ -175,6 +178,26 @@ class MainActivity : AppCompatActivity() {
         controller.onActivationCodeRequired = null
         controller.onActivationCompleted = null
         controller.onError = null
+    }
+
+    /**
+     * 数据变更 → 实时刷新底部未读角标与会话列表。
+     *
+     * updateUnreadBadge 此前只在 onResume 的 renderAll 里执行，导致打开对话
+     * 清零未读（clearUnread）或新消息累加未读后，角标要等下一次 onResume 才更新。
+     * 订阅 repository.onDataChanged 后，任何数据变更都立即反映到 UI。
+     *
+     * 注意：appendMessage → persist → onDataChanged 发生在 OkHttp 工作线程（消息落库），
+     * clearUnread 则在主线程（用户点击），必须统一切回 UI 线程。
+     */
+    private fun bindRepository() {
+        repository.onDataChanged = {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                updateUnreadBadge()
+                chatPage.render()
+            }
+        }
     }
 
     // ---------------- Tab 切换 ----------------

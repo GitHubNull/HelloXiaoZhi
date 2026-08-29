@@ -111,6 +111,50 @@ class BotRepositoryTest {
     }
 
     @Test
+    fun `正在查看的对话到达 AI 消息不计未读 但预览与时间仍更新`() {
+        val repo = newRepo()
+        val botId = BotRepositoryFactory.DEFAULT_BOT_ID
+        repo.visibleBotId = botId
+
+        repo.appendMessage(botId, ChatRole.AI, "回答一", ts = 1000L)
+        repo.appendMessage(botId, ChatRole.AI, "回答二", ts = 2000L)
+
+        val conversation = repo.conversation(botId)!!
+        assertEquals(0, conversation.unread)
+        assertEquals(0, repo.totalUnread())
+        assertEquals("回答二", conversation.lastPreview)
+        assertEquals(2000L, conversation.lastTs)
+        // 消息本身仍然落库（详情页实时展示不受影响）
+        assertEquals(2, repo.messages(botId).size)
+    }
+
+    @Test
+    fun `退出查看后 AI 消息恢复累加未读`() {
+        val repo = newRepo()
+        val botId = BotRepositoryFactory.DEFAULT_BOT_ID
+        repo.visibleBotId = botId
+        repo.appendMessage(botId, ChatRole.AI, "查看中", ts = 1000L)
+
+        repo.visibleBotId = null
+        repo.appendMessage(botId, ChatRole.AI, "已离开", ts = 2000L)
+
+        assertEquals(1, repo.conversation(botId)!!.unread)
+        assertEquals(1, repo.totalUnread())
+    }
+
+    @Test
+    fun `查看状态不影响其它机器人的未读累加`() {
+        val repo = newRepo()
+        repo.addBot(bot("bot_b", "小学", "11:22:33:44:55:66"))
+        repo.visibleBotId = BotRepositoryFactory.DEFAULT_BOT_ID
+
+        repo.appendMessage("bot_b", ChatRole.AI, "后台消息", ts = 1000L)
+
+        assertEquals(1, repo.conversation("bot_b")!!.unread)
+        assertEquals(1, repo.totalUnread())
+    }
+
+    @Test
     fun `向不存在的机器人追加消息被拒绝 迟到帧不应凭空创建会话`() {
         val repo = newRepo()
 

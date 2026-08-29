@@ -60,6 +60,9 @@ class ChatDetailController(
     fun open(botId: String) {
         val bot = repository.bot(botId) ?: return
         openBotId = botId
+        // 先标记正在查看再清零：此后到达的 AI 回复不再计未读，
+        // 避免用户眼看着回答却仍被角标提醒（退出重进才消）
+        repository.visibleBotId = botId
         repository.clearUnread(botId)
         botName.text = bot.name
         updateStatus(bot)
@@ -70,6 +73,7 @@ class ChatDetailController(
 
     fun close() {
         openBotId = null
+        repository.visibleBotId = null
         container.close()
     }
 

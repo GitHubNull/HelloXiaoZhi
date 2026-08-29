@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.1] - 2026-08-30
+
+### Added
+
+- 正在查看的对话到达 AI 消息不计未读：`BotRepository.visibleBotId`（运行时状态，不落盘）由对话详情页 open/close 维护，查看期间回复不再产生角标提醒（预览与时间戳仍更新、消息仍落库）
+
+### Fixed
+
+- 修复未读角标不实时更新：`MainActivity` 订阅 `repository.onDataChanged`，清零/累加未读后立即刷新角标与会话列表（此前要等下一次 `onResume`）；`onDestroy` 解绑避免 Activity 泄漏
+- 修复通话计时恒为 0：`VoiceCallActivity` 计时器在 `callStarted` 置位后才启动，避免首次执行命中 `if (!callStarted) return` 后计时链永久中断
+
 ## [0.4.0] - 2026-08-30
 
 ### Changed

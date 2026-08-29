@@ -33,6 +33,16 @@ class BotRepository(
     /** 数据变更通知（主线程），用于列表与徽标重渲染 */
     var onDataChanged: (() -> Unit)? = null
 
+    /**
+     * 当前正在查看的对话机器人（运行时状态，不落盘），由对话详情页在
+     * open / close 时维护。查看期间到达的 AI 消息不计未读：用户正看着
+     * 这个对话，回答不应再产生角标提醒。
+     *
+     * @Volatile：appendMessage 在 OkHttp 工作线程读取，详情页在主线程写入。
+     */
+    @Volatile
+    var visibleBotId: String? = null
+
     private val ioExecutor: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "bot-repo-io") }
 
@@ -87,7 +97,8 @@ class BotRepository(
         conversation(botId)?.messages?.toList() ?: emptyList()
 
     /**
-     * 追加一条消息。AI 消息会累加未读（由对话详情在打开时清零）。
+     * 追加一条消息。AI 消息会累加未读（由对话详情在打开时清零），
+     * 但该对话正在被查看时（[visibleBotId]）不计未读。
      *
      * @return 落库后的消息；机器人不存在时返回 null（迟到帧对应的机器人已被删除）
      */
@@ -108,7 +119,7 @@ class BotRepository(
         }
         conversation.lastTs = ts
         conversation.lastPreview = content
-        if (role == ChatRole.AI) conversation.unread += 1
+        if (role == ChatRole.AI && botId != visibleBotId) conversation.unread += 1
         persist()
         return message
     }
