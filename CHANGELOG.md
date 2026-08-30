@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] - 2026-08-30
+
+### Added
+
+- 新增 GitHub Actions 自动化发布工作流（`.github/workflows/release.yml`）：仅当推送符合语义化版本规范的标签（如 `1.0.0`、`1.0.0-alpha.1`、`1.0.0-beta.2`）时触发，自动构建 Release APK + AAB，基于标签间提交历史按 Conventional Commits 中文分组生成更新日志，并发布至 GitHub Releases（含 `-alpha`/`-beta`/`-rc` 后缀自动标记 Prerelease、SHA256 校验文件）；另支持 `workflow_dispatch` 手动触发
+- 新增更新日志生成脚本（`.github/scripts/gen-release-notes.sh`）：定位上一个标签计算提交范围，无上一标签时兜底全量历史，文末附 Full Changelog 对比链接
+
+### Changed
+
+- Release buildType 挂载 `debug` 签名配置：CI 产出的 Release APK 以 runner 自动生成的 debug keystore 签名，保证可直接安装（后续正式发版可升级为签名密钥 secrets 方案）
+
 ## [0.5.0] - 2026-08-30
 
 ### Added

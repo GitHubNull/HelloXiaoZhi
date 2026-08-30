@@ -10,8 +10,8 @@ android {
         applicationId = "org.oxff.helloxiaozhi"
         minSdk = 21
         targetSdk = 27
-        versionCode = 11
-        versionName = "0.5.0"
+        versionCode = 12
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -22,6 +22,9 @@ android {
 
     buildTypes {
         release {
+            // CI 自动发布：以 runner 生成的 debug keystore 签名，保证 Release APK 可直接安装；
+            // 后续正式发版可替换为上传签名密钥（secrets）方案。
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = false
             }
