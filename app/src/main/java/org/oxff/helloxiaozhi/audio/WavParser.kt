@@ -6,10 +6,10 @@ import java.nio.ByteOrder
 /**
  * 最小化 WAV 解析器。
  *
- * 用于自定义服务器（ref xiaozhi-webui 后端代理）模式：该代理将服务器
- * 下行的 Opus 解码为 16kHz / 单声道 / 16bit WAV 后发给浏览器，因此
- * 二进制帧以 "RIFF" 开头。官方直连模式下二进制帧为原始 Opus，不会
- * 进入此解析器（由 XiaoZhiController 按魔数分流）。
+ * 用于自定义代理服务器模式：该代理将服务器下行的 Opus 解码为
+ * 16kHz / 单声道 / 16bit WAV 后发给客户端，因此二进制帧以 "RIFF" 开头。
+ * 官方直连模式下二进制帧为原始 Opus，不会进入此解析器（由
+ * XiaoZhiController 按魔数分流）。
  */
 object WavParser {
 

@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.1] - 2026-08-30
+
+### Changed
+
+- 仓库结构重构：`agents.md` 重命名为 `AGENTS.md`（GitHub AI 代理上下文文件标准命名），README 项目结构同步更新
+- 文档清理：`README.md` / `AGENTS.md` / `tools/asr/README.md` 移除参考项目的大篇幅介绍（技术栈、启动教程、模块对照表），仅保留致谢与第三方声明；「WebUI 代理」表述统一改为「自定义代理」
+- 代码注释清除「对应 Web 端」溯源标注（`AudioPlayer`、`AudioRecorderManager`、`WavParser`、`ChatStateMachine`、`XiaoZhiController`、`XiaoZhiWebSocket`、`AudioMath`、`AudioMathTest`）
+
+### Removed
+
+- 移除参考实现副本目录 `ref/xiaozhi-webui-master`（66 个文件）：解除 Git 跟踪并移出仓库，保留本地未跟踪副本供离线查阅
+
 ## [0.6.0] - 2026-08-30
 
 ### Added

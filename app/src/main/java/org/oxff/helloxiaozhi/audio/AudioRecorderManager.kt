@@ -10,14 +10,12 @@ import android.util.Log
 import org.oxff.helloxiaozhi.util.AudioMath
 
 /**
- * 麦克风采集管理器，对应 Web 端 AudioWorklet + 后端 AudioProcessor 的
- * "采集 → 成帧（960 采样 / 60ms@16kHz）→ 电平检测"链路。
+ * 麦克风采集管理器："采集 → 成帧（960 采样 / 60ms@16kHz）→ 电平检测"链路。
  *
  * 兼容性设计：
  *  - 首选 16kHz 采集（小智协议标准采样率）；
  *  - 若设备不支持 16kHz（getMinBufferSize 返回异常），降级 44.1kHz 采集 +
- *    线性重采样到 16kHz（对应 AudioService 中 24kHz 采集与后端 16kHz
- *    处理之间的采样率转换思想）。
+ *    线性重采样到 16kHz。
  *  - 回声消除（AEC）可用时开启，失败静默降级。
  */
 class AudioRecorderManager(

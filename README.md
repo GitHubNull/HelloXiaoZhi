@@ -2,7 +2,7 @@
 
 # HelloXiaoZhi
 
-> 基于 [xiaozhi](https://github.com/78/xiaozhi) 协议的 Android 端「小智」AI 语音助手客户端，配套 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 参考实现（WebUI + WebSocket 代理后端）。本项目仅供学习交流使用。
+> 基于 [xiaozhi](https://github.com/78/xiaozhi) 协议的 Android 端「小智」AI 语音助手客户端。本项目仅供学习交流使用。
 
 HelloXiaoZhi 是一个运行在 Android 手机上的小智语音助手客户端：像微信一样和小智文字聊天，也能直接语音对话，支持随时打断。项目在无硬件的条件下体验小智的完整对话链路——OTA 设备注册、WebSocket 长连接、Opus 音频编解码、语音打断与状态机切换。
 
@@ -11,7 +11,7 @@ HelloXiaoZhi 是一个运行在 Android 手机上的小智语音助手客户端�
 - **语音通话**：按住即可与小智实时语音对话，支持用户随时打断 AI 回复（abort 机制）
 - **文字聊天**：像即时通讯软件一样发送文字消息，AI 回复同时以语音播放
 - **OTA 设备注册与激活**：直连官方服务器时自动注册设备，展示 6 位验证码，按提示完成激活
-- **双模式连接**：支持官方服务器直连与自定义服务器（如本地 WebUI 代理）两种模式，一键切换
+- **双模式连接**：支持官方服务器直连与自定义服务器两种模式，一键切换
 - **自动重连**：WebSocket 断线后 3 秒自动重连
 - **声浪动效**：语音通话时实时展示用户说话音量波形
 - **兼容低版本 Android**：minSdk 21（Android 5.0），并针对低采样率采集设备做了 44.1kHz → 16kHz 线性重采样兜底
@@ -37,12 +37,9 @@ HelloXiaoZhi
 │   │       └── XiaoZhiApp.kt               # Application 入口
 │   └── src/test/                           # JVM 单元测试
 │   └── src/androidTest/                    # 仪器化测试（录音/Opus 编解码探针）
-├── ref/xiaozhi-webui-master/               # 参考实现：WebUI（Vue3）+ WebSocket 代理后端
-│   ├── src/                                # Vue3 + TypeScript 前端（Vite + Pinia + Element Plus）
-│   └── backend/                            # Python FastAPI 代理后端（uv 管理）
 ├── screenshots/                            # 运行截图
 ├── gradle/                                 # Gradle wrapper 与版本目录（libs.versions.toml）
-├── agents.md                               # AI 代理上下文文档
+├── AGENTS.md                               # AI 代理上下文文档
 ├── DISCLAIMER.md                           # 免责声明
 └── README.md
 ```
@@ -53,8 +50,6 @@ HelloXiaoZhi
 | --- | --- |
 | Android 客户端 | Kotlin 2.2、Android 原生 View 体系（AppCompat + Material）、OkHttp 4.12（WebSocket）、Gson、Kotlin Coroutines、NDK + CMake + libopus（JNI） |
 | Android 构建 | Gradle（AGP 9.2.1）、Version Catalog、minSdk 21 / targetSdk 27 / compileSdk 36 |
-| WebUI 前端（参考） | Vue 3 + TypeScript + Vite + Pinia + Element Plus，Web Audio API / AudioWorklet |
-| WebUI 后端（参考） | Python 3.13 + FastAPI + uvicorn + opuslib + websockets（uv 包管理） |
 
 > 说明：Android 端采用原生 View 体系而非 Jetpack Compose，以保持对 Android 5.0（API 21）的兼容性；音频编解码走 NDK 直调 libopus，避免引入大型第三方库。
 
@@ -63,7 +58,6 @@ HelloXiaoZhi
 ### 环境要求
 
 - **Android 端**：Android Studio（Ladybug 及以上）、JDK 17+、Android SDK（compileSdk 36）、CMake 与 NDK（用于编译 opus_jni）
-- **WebUI 端**（可选）：Node.js 18+、pnpm、Python 3.13+、uv
 
 ### Android 端编译运行
 
@@ -84,35 +78,6 @@ HelloXiaoZhi
 
 > 编译脚本：`gradlew assembleDebug`（Windows 下为 `gradlew.bat assembleDebug`），产物在 `app/build/outputs/apk/debug/`。
 
-### WebUI 端启动（参考实现）
-
-进入参考目录：
-
-```bash
-cd ref/xiaozhi-webui-master
-```
-
-**一键启动（推荐）**：
-
-```bash
-pnpm install                # 安装前端依赖
-cd backend && uv sync && cd ..   # 安装后端依赖
-pnpm dev                    # 同时启动前后端（前端 5173 / 后端 5000）
-```
-
-**分别启动**：
-
-```bash
-pnpm dev:frontend           # 前端：Vite dev server（http://localhost:5173）
-pnpm dev:backend            # 后端：FastAPI + WebSocket 代理（ws://localhost:5000）
-```
-
-浏览器访问 `http://localhost:5173` 即可使用 Web 版小智。此时 Android 端设置中把 WebSocket 地址改为 `ws://<电脑IP>:5000`，即可让手机通过 WebUI 代理与服务器通信。
-
-> **Windows 注意**：终端出现中文乱码时，请使用 PowerShell / Windows Terminal，或执行 `chcp 65001` 切换到 UTF-8。
->
-> **websockets 版本**：后端依赖 `websockets>=15.0.1`，若启动报 `BaseEventLoop.create_connection() got an unexpected keyword argument 'extra_headers'`，请执行 `cd backend && uv sync` 重新安装依赖。
-
 ## 架构设计
 
 ### 系统总览
@@ -127,8 +92,8 @@ pnpm dev:backend            # 后端：FastAPI + WebSocket 代理（ws://localho
        │      └── OTA 注册（HTTP POST）──► 验证码激活 → 建连
        │
        │    ┌──────────────────────────────┐
-       └──► │  自建 WebUI 代理（可选）        │
-           │  FastAPI：WS 代理 + WAV 下发    │
+       └──► │  自建代理服务器（可选）         │
+           │  WS 代理 + WAV 下发            │
            └──────────────────────────────┘
 ```
 
@@ -136,7 +101,7 @@ pnpm dev:backend            # 后端：FastAPI + WebSocket 代理（ws://localho
 
 ### 语音通话状态机（ChatStateMachine）
 
-对话采用**状态驱动**设计，与 Web 端 `ChatStateManager.ts` 逐行对齐：
+对话采用**状态驱动**设计：
 
 ```
                     电平 > 0.04（开始说话）
@@ -172,7 +137,7 @@ pnpm dev:backend            # 后端：FastAPI + WebSocket 代理（ws://localho
 ### WebSocket 消息协议
 
 - 文本帧：JSON 消息，类型包括 `hello`（握手）、`listen`（start/stop/detect）、`abort`、`stt`、`llm`、`tts`
-- 二进制帧：Opus 音频（官方直连）或 RIFF WAV（WebUI 代理下发）
+- 二进制帧：Opus 音频（官方直连）或 RIFF WAV（自定义代理下发）
 - 断线后 3 秒自动重连；所有 UI 回调均投递到主线程
 
 ## 常见问题（FAQ）
@@ -191,15 +156,11 @@ pnpm dev:backend            # 后端：FastAPI + WebSocket 代理（ws://localho
 
 设备不支持 16kHz 采集时会自动降级到 44.1kHz 采集并线性重采样到 16kHz；若连 44.1kHz 都不支持（极少数老设备），会提示此错误。
 
-**Q4：如何连接自建服务器 / WebUI 代理？**
+**Q4：如何连接自建服务器？**
 
 在设置中关闭「官方服务器直连」（或直接把 WebSocket 地址改为 `ws://<IP>:5000`），保存即可。此时走自定义模式，跳过 OTA 激活直接建连。
 
-**Q5：WebUI 后端启动报 `extra_headers` 错误？**
-
-`websockets` 库版本过旧导致，执行 `cd backend && uv sync` 确保安装 `websockets>=15.0.1`。
-
-**Q6：支持哪些 Android 版本？**
+**Q5：支持哪些 Android 版本？**
 
 minSdk 21（Android 5.0）起，兼容armeabi-v7a / arm64-v8a / x86 / x86_64 四种 ABI。libopus 通过 NDK 本地编译，不依赖在线下载。
 
@@ -207,4 +168,4 @@ minSdk 21（Android 5.0）起，兼容armeabi-v7a / arm64-v8a / x86 / x86_64 四
 
 本项目基于 MIT 许可证开源，详见 [LICENSE](LICENSE)。使用本项目前请阅读 [DISCLAIMER.md](DISCLAIMER.md) 中的免责声明。
 
-感谢 [xiaozhi](https://github.com/78/xiaozhi)、[xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 等开源项目的协议参考与实现启发。
+感谢 [xiaozhi](https://github.com/78/xiaozhi)、[xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)、[xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 等开源项目的协议参考与实现启发。

@@ -37,12 +37,12 @@ B 站视频下载需要用户会话信息（Cookie）。请按照以下步骤操
 2. 打开开发者工具（F12），切换到 Network 标签
 3. 播放任意视频，找到任意请求
 4. 右键请求，选择 "Copy" -> "Copy as cURL" 或 "Copy as fetch"
-5. 将复制的内容保存到文件（如 `tmp/B站请求报文文件/request1.txt`）
+5. 将复制的内容保存为本地文件（如 `request1.txt`）
 6. 运行提取工具：
 
 ```bash
 python tools/asr/extract_session.py \
-    --request-file tmp/B站请求报文文件/request1.txt \
+    --request-file request1.txt \
     --output tools/asr/bilibili_session.json
 ```
 

@@ -61,7 +61,7 @@ class XiaoZhiWebSocket(
     @Volatile
     private var deviceId: String = ""
 
-    /** 断开后是否自动重连（disconnect() 时置 false，对应 Web 端 disconnect） */
+    /** 断开后是否自动重连（disconnect() 时置 false） */
     @Volatile
     private var autoReconnect = false
 

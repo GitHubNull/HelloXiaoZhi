@@ -8,9 +8,8 @@ object AudioMath {
     /**
      * 计算一帧 PCM 的平均电平（0..1 浮点值）。
      *
-     * 对应 Web 端 AudioManager.detectAudioLevel：
-     * sum(abs(sample)) / length，输入为 -1..1 的 Float32；
-     * 此处输入为 int16，故再除以 32768 归一化。
+     * 算法：sum(abs(sample)) / length；此处输入为 int16，
+     * 故再除以 32768 归一化。
      */
     fun rmsLevel(frame: ShortArray): Float {
         if (frame.isEmpty()) return 0f

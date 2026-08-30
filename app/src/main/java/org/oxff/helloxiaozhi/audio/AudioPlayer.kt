@@ -8,15 +8,14 @@ import android.util.Log
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
- * TTS 音频播放器，对应 Web 端 AudioService 的播放队列。
+ * TTS 音频播放器（播放队列模型）。
  *
  * 设计：
  *  - 服务器 Opus 帧解码后的 PCM（int16）进入队列；
  *  - 单一播放线程持续 drain 队列写入 AudioTrack（MODE_STREAM）；
  *  - 播放线程随语音通话会话创建/销毁（startVoiceCall/stopVoiceCall）；
- *  - 用户开口打断时 pausePlayback() 清空队列（对应 Web 端 stopPlaying +
- *    clearAudioQueue），AI 开始说话时 resumePlayback() 恢复（对应 playAudio）；
- *  - 队列自然播空超过 500ms 触发 onQueueEmpty（对应 Web 端 onQueueEmpty）。
+ *  - 用户开口打断时 pausePlayback() 清空队列，AI 开始说话时 resumePlayback() 恢复；
+ *  - 队列自然播空超过 500ms 触发 onQueueEmpty。
  */
 class AudioPlayer {
 
@@ -87,7 +86,7 @@ class AudioPlayer {
         synchronized(lock) { lock.notifyAll() }
     }
 
-    /** 恢复播放（对应 Web 端 playAudio：AI_START_SPEAKING 事件触发） */
+    /** 恢复播放（AI_START_SPEAKING 事件触发） */
     fun resumePlayback() {
         Log.i(TAG, "resumePlayback: playing=true, queue=${queue.size}")
         playing = true
@@ -105,7 +104,7 @@ class AudioPlayer {
         synchronized(lock) { lock.notifyAll() }
     }
 
-    /** 暂停并清空队列（对应 Web 端 stopPlaying + clearAudioQueue：用户开口时触发） */
+    /** 暂停并清空队列（用户开口时触发） */
     fun pausePlayback() {
         Log.i(TAG, "pausePlayback: playing=false, queue=${queue.size}")
         playing = false

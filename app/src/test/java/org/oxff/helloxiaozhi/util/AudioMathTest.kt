@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * VAD 电平计算单元测试（对应 Web 端 AudioManager.detectAudioLevel）。
+ * VAD 电平计算单元测试。
  */
 class AudioMathTest {
 

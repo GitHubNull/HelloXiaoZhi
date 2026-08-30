@@ -47,7 +47,7 @@ class ChatStateMachine(
         /** 获取当前会话 ID（abort 消息需要） */
         fun getSessionId(): String
 
-        /** 状态事件（对应 Web 端 ChatEvent） */
+        /** 状态事件 */
         fun onEvent(event: ChatEvent)
 
         /** 用户持续说话时的电平（驱动声浪 UI）；可能为空 */
@@ -80,12 +80,12 @@ class ChatStateMachine(
         uiExecutor.post { transition(newState) }
     }
 
-    /** 重置状态机（进入语音通话时调用，对应 Web 端 showVoiceCallPanel） */
+    /** 重置状态机（进入语音通话时调用） */
     fun reset() {
         setState(ChatState.IDLE)
     }
 
-    /** 销毁：取消挂起的静音计时（对应 Web 端 destroy） */
+    /** 销毁：取消挂起的静音计时 */
     fun destroy() {
         // 无静音计时需要取消（服务器端 VAD 驱动，无客户端静音检测）
     }

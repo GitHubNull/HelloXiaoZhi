@@ -211,7 +211,7 @@ class XiaoZhiController(
 
     init {
         activeBotId = repository.defaultBot()?.id
-        // 播放队列播空 → 回到 IDLE（对应 Web 端 onQueueEmpty）
+        // 播放队列播空 → 回到 IDLE
         player.onQueueEmpty = {
             mainHandler.post {
                 isAiPlaying = false
@@ -220,8 +220,7 @@ class XiaoZhiController(
                 }
             }
         }
-        // 播放会话常驻（聊天模式的 TTS 回复也需要播放，对应 Web 端
-        // AudioService 随应用初始化）
+        // 播放会话常驻（聊天模式的 TTS 回复也需要播放）
         player.startSession()
     }
 

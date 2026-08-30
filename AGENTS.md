@@ -1,14 +1,13 @@
-# agents.md — HelloXiaoZhi AI 代理上下文文档
+# AGENTS.md — HelloXiaoZhi AI 代理上下文文档
 
 > 本文档面向 AI 编程代理与后续开发者，描述 HelloXiaoZhi 的核心业务逻辑、状态机设计、音频处理流程与 WebSocket 通信机制。所有符号名可直接在代码库中定位。
 
 ## 1. 项目概览
 
-HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)，逻辑逐行移植自 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui)（仓库内 `ref/xiaozhi-webui-master/` 为参考实现副本）。
+HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)，逻辑移植自 [xiaozhi-webui](https://github.com/kalicyh/xiaozhi-webui) 开源项目。
 
 - **Android 端**：`app/src/main/java/org/oxff/helloxiaozhi/`（Kotlin，原生 View 体系，非 Compose）
-- **参考 Web 端**：`ref/xiaozhi-webui-master/src/`（Vue3 + TS）与 `ref/xiaozhi-webui-master/backend/`（Python FastAPI 代理）
-- **关键设计原则**：Android 端代码注释中大量标注了「对应 Web 端 Xxx.ts / ref 后端 xxx.py」的对应关系，修改时务必保持行为对齐。
+- **关键设计原则**：核心逻辑（状态机、消息协议、音频链路）改动时注意保持协议行为一致。
 
 ## 2. 模块索引（符号名 → 职责）
 
@@ -25,7 +24,7 @@ HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 
 | 上行增强 | `MicEnhancer`（audio/） | 帧级 AGC（轻声放大 +24dB 上限/大声衰减防削波）+ 噪声门（防底噪误触发服务器端 VAD） |
 | 音频播放 | `AudioPlayer`（audio/） | AudioTrack 播放队列、打断清空、队列播空回调；`playbackGain` 播放增益 |
 | Opus 编解码 | `OpusCodec`（audio/）→ `app/src/main/cpp/opus_jni.c` | libopus JNI 封装；编码 16k/单声道/60ms；解码采样率动态 |
-| WAV 解析 | `WavParser`（audio/） | RIFF 魔数检测与解析（WebUI 代理下发的 WAV 分流） |
+| WAV 解析 | `WavParser`（audio/） | RIFF 魔数检测与解析（自定义代理下发的 WAV 分流） |
 | 工具 | `AudioMath`、`DeviceInfoProvider`、`Executors.kt`、`MacGenerator`、`TimeFormat`（util/） | 电平计算、设备 ID（MAC 格式）生成、主线程执行器/静音调度器、MAC 生成校验、时间展示 |
 | UI 外壳 | `MainActivity`（ui/） | 三 Tab 外壳：导航栏 + 聊天/通讯录/设置 + 对话详情滑入层 + 模态框/Toast 宿主 |
 | 页面控制器 | `ui/page/{ChatPage,ChatDetail,ContactsPage,SettingsPage}Controller` | 各 Tab 的渲染与交互（普通 Kotlin 类，非 Fragment） |
@@ -34,7 +33,7 @@ HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 
 
 ## 3. 语音通话状态机（ChatStateMachine）
 
-### 3.1 状态与常量（服务器端 VAD 驱动，对齐参考 APP auto 模式）
+### 3.1 状态与常量（服务器端 VAD 驱动）
 
 ```kotlin
 enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
@@ -48,11 +47,11 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 
 - **IDLE**：所有音频帧直接上行（服务器端 VAD 检测），收到服务器 `stt` → `USER_SPEAKING`
 - **USER_SPEAKING**：每帧上行 Opus + 电平驱动声浪 UI；服务器 `tts start` → `AI_SPEAKING`
-- **AI_SPEAKING**：完全不上行（`XiaoZhiController.isAiPlaying` 门控，对齐参考 APP `!o.f215p`），避免 TTS 泄漏污染服务器端 VAD；`tts stop` 宽限期后队列已播空 → `IDLE`
+- **AI_SPEAKING**：完全不上行（`XiaoZhiController.isAiPlaying` 门控），避免 TTS 泄漏污染服务器端 VAD；`tts stop` 宽限期后队列已播空 → `IDLE`
 
 ### 3.3 消息副作用与 listen 生命周期（真机回归教训）
 
-- listen start/stop **不由状态迁移发送**：`startVoiceCall()` 主动发 `ListenMessage.start`（mode=auto），`stopVoiceCall()` 发 `ListenMessage.stop`；断线重连后 `handleHello` 检测到通话中（recorder 非空）用新 session 重发 listen start。**每轮回复播完后必须重发 listen start**（`ChatEvent.AI_STOP_SPEAKING` 且通话中）：官方服务器在 tts stop 后不会自动继续监听，不重发则只有第一轮被识别，后续语音要等挂断时的 listen stop 才被一次性识别（真机实测）。若等收到 `stt` 才发 listen start 会形成死锁；中途重发会重置服务器监听；`version=1 + response_mode="manual"`（参考 APP 对接的第三方服务器协议）与官方/自建代理不兼容，已回退 `version=3`
+- listen start/stop **不由状态迁移发送**：`startVoiceCall()` 主动发 `ListenMessage.start`（mode=auto），`stopVoiceCall()` 发 `ListenMessage.stop`；断线重连后 `handleHello` 检测到通话中（recorder 非空）用新 session 重发 listen start。**每轮回复播完后必须重发 listen start**（`ChatEvent.AI_STOP_SPEAKING` 且通话中）：官方服务器在 tts stop 后不会自动继续监听，不重发则只有第一轮被识别，后续语音要等挂断时的 listen stop 才被一次性识别（真机实测）。若等收到 `stt` 才发 listen start 会形成死锁；中途重发会重置服务器监听；`version=1 + response_mode="manual"`（第三方服务器协议）与官方/自建代理不兼容，已回退 `version=3`
 - 进入 `USER_SPEAKING`：触发 `ChatEvent.USER_START_SPEAKING`（→ `AudioPlayer.pausePlayback()` 清空队列）
 - 离开 `USER_SPEAKING`：`ChatEvent.USER_STOP_SPEAKING`
 - 进入 `AI_SPEAKING`：触发 `ChatEvent.AI_START_SPEAKING`（→ 延迟 300ms `AudioPlayer.resumePlayback()`）
@@ -91,7 +90,7 @@ AudioRecorderManager.recordLoop()
 XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
   → XiaoZhiController.handleAudioFrame（OkHttp 回调线程执行）
       → WavParser.isWav(data)？
-          RIFF 魔数：WavParser.parse → PCM（WebUI 代理下发，采样率可能变化，同步 player.setSampleRate）
+          RIFF 魔数：WavParser.parse → PCM（自定义代理下发，采样率可能变化，同步 player.setSampleRate）
           否则：OpusCodec.decode(data, sampleRate*60/1000)（16kHz=960，24kHz=1440）
   → AudioPlayer.enqueue(pcm)
   → 若状态为 IDLE → setState(AI_SPEAKING)
@@ -105,7 +104,7 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 
 请求头：`Device-Id`（MAC 格式）、`Client-Id`（UUID，首次生成持久化）、`Protocol-Version: 1`，token 开启时附加 `Authorization: Bearer <token>`。连接建立（onOpen）后立即发送 `HelloMessage`（type=hello, version=3, transport=websocket, audio_params=opus/16k/1ch/60ms 帧）。
 
-### 5.2 消息类型（Messages.kt，逐字段对齐 ref types/message.ts）
+### 5.2 消息类型（Messages.kt）
 
 **上行**：
 - `HelloMessage`：握手（音频参数声明）
@@ -128,25 +127,13 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 ## 6. 激活与连接流程（官方直连模式）
 
 1. `XiaoZhiController.ensureConnected()`：官方模式（`AppConfig.isOfficialMode()`）→ `ActivationFlow.ensureActivated(identity, listener)`，identity 取当前激活机器人的 MAC
-2. `OtaClient.register(otaUrl, deviceId, clientId, localIp)` POST OTA 注册（payload 逐字段对齐 websocket_proxy.py，模拟 ESP32 固件信息）
+2. `OtaClient.register(otaUrl, deviceId, clientId, localIp)` POST OTA 注册（payload 模拟 ESP32 固件信息）
 3. 响应含 `activation.code`（6 位验证码）→ `onActivationCodeRequired` 弹框展示，每 5s 轮询（`POLL_INTERVAL_MS=5000`），用户可点「我已添加设备」立即检查（`requestCheckNow()`）
 4. `activation` 字段消失 → `onActivated` → **必须新建 WebSocket 连接**（官方协议要求）
 5. 自定义模式（非官方 URL）跳过激活直接 `ws.connect(bot.mac)`
 6. 「获取该 MAC 的激活码」（添加机器人模态框）调用 `ActivationFlow.probeOnce(identity)`：单次注册、不轮询、不改全局配置
 
-## 7. 与参考实现的对应关系
-
-| Android 端 | 参考实现 |
-| --- | --- |
-| `ChatStateMachine` | `ref/.../src/services/ChatStateManager.ts` |
-| `XiaoZhiWebSocket` | `ref/.../src/services/WebSocketManager.ts` + `backend/app/proxy/websocket_proxy.py`（服务器侧握手） |
-| `AudioRecorderManager` | Web 端 AudioWorklet + `backend/app/utils/audio.py` |
-| `AudioPlayer` | Web 端 AudioService（`ref/.../src/services/AudioManager.ts`） |
-| `OtaClient` | `backend/app/proxy/websocket_proxy.py` 的 `_update_ota_address()` |
-| `ActivationFlow` | 官方固件 `kDeviceStateActivating → kDeviceStateIdle` 阶段 |
-| `XiaoZhiController` | Web 端 `App.vue` 的组装逻辑 + 后端代理职责 |
-
-## 8. 测试与构建
+## 7. 测试与构建
 
 - **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`、`BotRepositoryTest`、`MacGeneratorTest`、`TimeFormatTest`、`AvatarPaletteTest`、`MicEnhancerTest` 及 `asr/` 测试体系。运行：`gradlew testDebugUnitTest`
 - **仪器化测试**（`app/src/androidTest/`）：`AudioRecordProbeInstrumentedTest`、`OpusCodecInstrumentedTest`。运行需真机/模拟器
@@ -154,9 +141,9 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 - **构建约束**：OkHttp 锁定 4.12.0（最后一个支持 API 21 的版本，勿升级）；targetSdk 27 且 lint 禁用 `ExpiredTargetSdkVersion`（兼容旧设备）；Java/Kotlin target 11
 - **命令行构建必须显式指定 JDK 21**：裸跑会因工具链自动探测选中 Qoder redhat.java 扩展自带的 JRE 21（无 jlink）而失败（JdkImageTransform 报 `jlink.exe does not exist`）。必须同时：① `$env:JAVA_HOME='D:\dev_env\java\jdk\21'`（钉住守护进程 JVM，仅传 -D 参数不够）；② 若已有守护进程先 `gradlew --stop`；③ 追加 `-Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.java.installations.paths='D:\dev_env\java\jdk\21'`
 
-## 9. 常见改动提示
+## 8. 常见改动提示
 
-- 改动协议消息字段：同步修改 `Messages.kt` 与 `ref/xiaozhi-webui-master/src/types/message.ts`
+- 改动协议消息字段：同步修改 `Messages.kt`，并与服务器端实际协议保持兼容
 - 改动状态机逻辑：必须更新 `ChatStateMachineTest` 中对应的转换用例
 - 改动机器人/会话数据模型或持久化格式：必须更新 `BotRepositoryTest`；`AppData.version` 递增以触发旧档重建
 - 改动 UI 结构：保持三 Tab 外壳的层叠顺序（Tab 内容 < Tab 栏 < 对话详情 < 模态框 < Toast），且 controller 回调只在 `MainActivity` 单点绑定再分发，不要在页面控制器里直接绑定
