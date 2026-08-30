@@ -22,6 +22,7 @@ HelloXiaoZhi 是 Android 端「小智」AI 语音助手客户端，协议参考 
 | 状态机 | `ChatStateMachine`（chat/） | 语音通话状态机（详见 §3）；`onStateChanged` 驱动通话页动画 |
 | 消息模型 | `Messages.kt`、`ChatModels.kt`（chat/） | 上行/下行 JSON 消息数据类；ChatState/ChatEvent/ChatRole/ConnectionStatus（含 CONNECTING） |
 | 音频采集 | `AudioRecorderManager`（audio/） | AudioRecord 采集、成帧（960 采样/60ms）、RMS 电平、44.1k→16k 重采样兜底；上行增益与 VAD 解耦 |
+| 上行增强 | `MicEnhancer`（audio/） | 帧级 AGC（轻声放大 +24dB 上限/大声衰减防削波）+ 噪声门（防底噪误触发服务器端 VAD） |
 | 音频播放 | `AudioPlayer`（audio/） | AudioTrack 播放队列、打断清空、队列播空回调；`playbackGain` 播放增益 |
 | Opus 编解码 | `OpusCodec`（audio/）→ `app/src/main/cpp/opus_jni.c` | libopus JNI 封装；编码 16k/单声道/60ms；解码采样率动态 |
 | WAV 解析 | `WavParser`（audio/） | RIFF 魔数检测与解析（WebUI 代理下发的 WAV 分流） |
@@ -70,13 +71,19 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 AudioRecorderManager.recordLoop()
   → AudioRecord（优先 16kHz；getMinBufferSize 不支持则 44.1kHz + LinearResampler 转 16kHz）
   → 每次 read 40ms 数据，切分为 60ms 帧（OpusCodec.FRAME_SIZE = 960）
-  → AudioMath.rmsLevel(frame) 计算电平（仅驱动声浪 UI，无客户端 VAD）
+  → AudioMath.rmsLevel(frame) 计算电平（仅驱动声浪 UI，无客户端 VAD；用原始帧）
+  → MicEnhancer.process(frame)：帧级语音增强（仅作用于上行帧）
+      AGC：轻声帧放大逼近目标峰值电平 0.3（上限 +24dB），大声帧衰减防削波（下限 -12dB）
+      噪声门：低于「底噪 × 2」的帧衰减到 0.1 倍，防 AGC 放大背景噪声误触发服务器端 VAD
+  → applyMicGain：叠加用户增益（通话页滑块 ±12dB）
   → isAiPlaying 门控（AI 播放时完全不上行）
   → ChatStateMachine.handleAudioLevel(level, frame)
       → IDLE / USER_SPEAKING 时回调 sendAudioData → OpusCodec.encode → ws.sendOpus（二进制帧）
 ```
 
-关键细节：音频源用 `MediaRecorder.AudioSource.MIC` 而非 VOICE_COMMUNICATION（后者在部分设备会把输入当回声全消除，实测电平恒为 0）；AEC 可用时开启，失败静默降级。
+关键细节：
+- 音频源优先 `VOICE_COMMUNICATION`（内置 AEC/NS），若电平连续 150 帧恒为 0 自动降级 `MIC`，降级后手动挂 `AcousticEchoCanceler` + `NoiseSuppressor`（失败静默降级）
+- `MicEnhancer`（audio/）：纯 Kotlin 无 Android 依赖；底噪由首帧引导初始化，只有低于「底噪 × 4」的帧参与底噪跟踪（持续轻声不会被误学成底噪）；诊断字段 `lastGain`/`currentNoiseFloor`/`currentEstPeak` 每 100 帧随电平日志输出（`enh[...]` 段）
 
 ### 4.2 下行（服务器 → 播放）
 
@@ -141,11 +148,11 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 
 ## 8. 测试与构建
 
-- **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`、`BotRepositoryTest`、`MacGeneratorTest`、`TimeFormatTest`、`AvatarPaletteTest`。运行：`gradlew testDebugUnitTest`
+- **单元测试**（`app/src/test/`）：`ChatStateMachineTest`、`MessagesTest`、`WavParserTest`、`OtaClientTest`、`AudioMathTest`、`BotRepositoryTest`、`MacGeneratorTest`、`TimeFormatTest`、`AvatarPaletteTest`、`MicEnhancerTest` 及 `asr/` 测试体系。运行：`gradlew testDebugUnitTest`
 - **仪器化测试**（`app/src/androidTest/`）：`AudioRecordProbeInstrumentedTest`、`OpusCodecInstrumentedTest`。运行需真机/模拟器
 - **构建**：`gradlew assembleDebug`；原生库由 CMake 编译（`app/src/main/cpp/CMakeLists.txt`），ABI：arm64-v8a / armeabi-v7a / x86_64 / x86
 - **构建约束**：OkHttp 锁定 4.12.0（最后一个支持 API 21 的版本，勿升级）；targetSdk 27 且 lint 禁用 `ExpiredTargetSdkVersion`（兼容旧设备）；Java/Kotlin target 11
-- **命令行构建必须显式指定 JDK 21**：裸跑会因工具链自动探测选中 Qoder redhat.java 扩展自带的 JRE 21（无 jlink）而失败。追加 `-Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.java.installations.paths='D:\dev_env\java\jdk\21'`
+- **命令行构建必须显式指定 JDK 21**：裸跑会因工具链自动探测选中 Qoder redhat.java 扩展自带的 JRE 21（无 jlink）而失败（JdkImageTransform 报 `jlink.exe does not exist`）。必须同时：① `$env:JAVA_HOME='D:\dev_env\java\jdk\21'`（钉住守护进程 JVM，仅传 -D 参数不够）；② 若已有守护进程先 `gradlew --stop`；③ 追加 `-Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.java.installations.paths='D:\dev_env\java\jdk\21'`
 
 ## 9. 常见改动提示
 
@@ -154,4 +161,5 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 - 改动机器人/会话数据模型或持久化格式：必须更新 `BotRepositoryTest`；`AppData.version` 递增以触发旧档重建
 - 改动 UI 结构：保持三 Tab 外壳的层叠顺序（Tab 内容 < Tab 栏 < 对话详情 < 模态框 < Toast），且 controller 回调只在 `MainActivity` 单点绑定再分发，不要在页面控制器里直接绑定
 - 改动音频参数（采样率/帧长）：`AudioParams`（hello）、`OpusCodec.FRAME_SIZE`、`AudioRecorderManager` 成帧逻辑需同步
+- 改动上行增强参数（目标电平/增益上下限/噪声门阈值）：必须更新 `MicEnhancerTest` 对应用例；调参前注意「底噪跟踪只吃低于底噪×4 的帧」「电平用原始帧与增强器解耦」两条不变式
 - 真机排障：Logcat 过滤 `XiaoZhiController`（连接/消息）、`AudioRecorder`（电平帧）、`XiaoZhiWebSocket`（WS 生命周期）、`[SM]` 前缀（状态迁移）

@@ -5,6 +5,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import org.oxff.helloxiaozhi.util.AudioMath
 
@@ -35,6 +36,13 @@ class AudioRecorderManager(
     private var zeroLevelCount = 0
 
     /**
+     * 上行帧级语音增强器（AGC + 噪声门）：轻声/悄悄话被放大到可触发
+     * 服务器端 VAD 的电平，同时噪声门抑制背景噪声防止误触发。
+     * 只作用于上行帧，不影响送给状态机的电平（仍用原始帧 + 固定基准）。
+     */
+    private val enhancer = MicEnhancer()
+
+    /**
      * 上行音频的用户增益（dB，相对基准），由通话页「你的增益」滑块设置。
      *
      * 只作用于上行的音频帧，**不**作用于送给状态机的电平——电平用固定的
@@ -57,6 +65,7 @@ class AudioRecorderManager(
     fun start() {
         if (thread != null && thread!!.isAlive) return
         stopped = false
+        enhancer.reset()
         setCommunicationMode()
         thread = Thread({ recordLoop() }, "audio-record").apply { start() }
     }
@@ -118,7 +127,12 @@ class AudioRecorderManager(
                 return
             }
             this.record = record
-            // VOICE_COMMUNICATION 模式已内置 AEC，无需额外 attach
+            // VOICE_COMMUNICATION 模式已内置 AEC/NS，无需额外 attach；
+            // 降级回 MIC 模式后系统不再处理，必须手动挂 AEC + NS
+            if (!useVoiceCommunication) {
+                attachAec(record)
+                attachNs(record)
+            }
             record.startRecording()
 
             val resampler = if (rate != TARGET_SAMPLE_RATE) {
@@ -144,9 +158,10 @@ class AudioRecorderManager(
                     if (filled == OpusCodec.FRAME_SIZE) {
                         // 电平与上行解耦：电平用固定 VAD 基准增益（用户不可调，
                         // 保证 VAD 阈值与零电平降级检测不受滑块影响），
-                        // 上行帧用用户增益（通话页「你的增益」滑块）
+                        // 上行帧先过增强器（AGC + 噪声门，轻声可触发且抑制底噪），
+                        // 再叠加用户增益（通话页「你的增益」滑块）
                         val level = AudioMath.rmsLevel(frame) * vadGainFactor
-                        val gainedFrame = applyMicGain(frame)
+                        val gainedFrame = applyMicGain(enhancer.process(frame))
                         frameCount++
                         // VOICE_COMMUNICATION 兜底检测：连续 150 帧电平为 0，降级回 MIC
                         // 注意：AI 播放期间 AEC 可能将输入当回声消除，导致电平为 0
@@ -177,9 +192,17 @@ class AudioRecorderManager(
                             zeroLevelCount = 0
                         }
                         // 前 20 帧全量打印（定位采集是否有效），之后每 100 帧
-                        // 电平 > 0.01 时也打印（观察用户语音和回声）
+                        // 电平 > 0.01 时也打印（观察用户语音和回声）；
+                        // 每 100 帧附带增强器状态（语音估计/底噪/增益）便于真机排障
                         if (frameCount <= 20 || frameCount % 100 == 0 || level > 0.01f) {
-                            Log.i(TAG, "record frame #$frameCount level=${"%.3f".format(level)}")
+                            val enh = if (frameCount % 100 == 0) {
+                                " enh[est=${"%.3f".format(enhancer.currentEstPeak)}" +
+                                    ",noise=${"%.4f".format(enhancer.currentNoiseFloor)}" +
+                                    ",gain=${"%.2f".format(enhancer.lastGain)}]"
+                            } else {
+                                ""
+                            }
+                            Log.i(TAG, "record frame #$frameCount level=${"%.3f".format(level)}$enh")
                         }
                         onFrame(gainedFrame, level)
                         filled = 0
@@ -235,6 +258,19 @@ class AudioRecorderManager(
             }
         } catch (_: Exception) {
             // AEC 不可用时静默降级，不影响主流程
+        }
+    }
+
+    /** 尝试启用硬件降噪（可用时），失败静默降级 */
+    private fun attachNs(record: AudioRecord) {
+        try {
+            if (!NoiseSuppressor.isAvailable()) return
+            val ns = NoiseSuppressor.create(record.audioSessionId)
+            if (ns != null) {
+                ns.enabled = true
+            }
+        } catch (_: Exception) {
+            // NS 不可用时静默降级，不影响主流程
         }
     }
 

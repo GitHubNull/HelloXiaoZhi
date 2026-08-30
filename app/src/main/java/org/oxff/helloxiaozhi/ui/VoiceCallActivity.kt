@@ -93,16 +93,20 @@ class VoiceCallActivity : AppCompatActivity() {
         historyList.adapter = historyAdapter
 
         findViewById<View>(R.id.btn_hangup).setOnClickListener { hangUp() }
+        // 初始 progress 与 recorder 实际默认值对齐（布局默认 70 会造成
+        // 「显示与实际不符」的迷惑）：50% = 1.0x / 0dB
         setupGainPopover(
             btnId = R.id.btn_ai_gain,
             popId = R.id.ai_gain_pop,
             titleRes = R.string.call_gain_ai,
+            initialProgress = 50,
             onGain = { percent -> controller.setPlaybackGain(percent / 100f * 2f) },
         )
         setupGainPopover(
             btnId = R.id.btn_user_gain,
             popId = R.id.user_gain_pop,
             titleRes = R.string.call_gain_user,
+            initialProgress = 50,
             onGain = { percent ->
                 // 0..100% 映射到 -12..+12 dB（相对基准），与 VAD 解耦
                 controller.setMicGainDb((percent / 100f) * 24f - 12f)
@@ -119,6 +123,7 @@ class VoiceCallActivity : AppCompatActivity() {
         btnId: Int,
         popId: Int,
         titleRes: Int,
+        initialProgress: Int,
         onGain: (Int) -> Unit,
     ) {
         val btn = findViewById<View>(btnId)
@@ -126,6 +131,8 @@ class VoiceCallActivity : AppCompatActivity() {
         val slider = pop.findViewById<SeekBar>(R.id.gain_slider)
         val value = pop.findViewById<TextView>(R.id.gain_value)
         pop.findViewById<TextView>(R.id.gain_pop_title).setText(titleRes)
+        // 先设置初始进度再注册监听，避免初始化触发 onGain
+        slider.progress = initialProgress
         value.text = getString(R.string.call_gain_value, slider.progress)
 
         btn.setOnClickListener {

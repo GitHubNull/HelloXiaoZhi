@@ -4,6 +4,26 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-08-30
+
+### Added
+
+- 新增上行语音增强器 `MicEnhancer`（audio/）：帧级 AGC（轻声帧放大逼近目标峰值电平 0.3，上限 +24dB；大声帧衰减防削波，下限 -12dB）+ 噪声门（低于「底噪 × 2」的帧衰减至 0.1 倍，防背景噪声误触发服务器端 VAD）；底噪由首帧引导初始化，仅「底噪 × 4 以下」的帧参与跟踪（持续轻声不会被误学成底噪）；诊断字段 `lastGain`/`currentNoiseFloor`/`currentEstPeak` 每 100 帧随电平日志输出（`enh[...]` 段）
+- 音频源自动降级：优先 `VOICE_COMMUNICATION`（内置 AEC/NS），连续 150 帧零电平自动降级 `MIC` 并手动挂 `AcousticEchoCanceler` + `NoiseSuppressor`（失败静默降级）
+- 新增 `MicEnhancerTest` 单元测试（AGC 放大/衰减、噪声门抑制、底噪跟踪不变式）
+
+### Changed
+
+- 上行链路顺序调整：电平（原始帧）→ `MicEnhancer.process` → 用户增益；增强器只作用于上行帧，不影响送给状态机的 VAD 电平
+
+### Fixed
+
+- 修复通话页增益滑块初始显示与实际不符：初始进度与 recorder 默认值对齐（50% = 1.0x / 0dB），并先设进度再注册监听避免初始化触发 `onGain`
+
+### Docs
+
+- `agents.md` 同步：新增「上行增强」模块说明、音频源降级细节、增强器调参不变式（底噪跟踪/电平解耦）、测试清单更新
+
 ## [0.4.1] - 2026-08-30
 
 ### Added
