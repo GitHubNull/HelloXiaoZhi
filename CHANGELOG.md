@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.2] - 2026-08-30
+
+### Fixed
+
+- 修复应用图标重复资源导致构建失败：mipmap 各密度目录下同时存在 `ic_launcher.png` 与 `ic_launcher.webp`（含 `ic_launcher_round`），资源合并报 Duplicate resources
+- 修复圆形图标红色双环被裁切：round 图标由「内容缩至 68% 居中 + 圆形遮罩」改为「整图填充圆形」，主体完整居中
+- 修复 adaptive 图标双层叠加重影：background 由整幅插画改为纯色背景（从源图边缘采样暖白色），避免 background 中的主体图案透过 foreground 透明区域显示
+
+### Changed
+
+- 重新生成全套应用图标：legacy `ic_launcher.webp` / `ic_launcher_round.webp` 按密度缩放（48~192px），adaptive foreground 缩至 61% 安全区居中，新增 `drawable-nodpi/ic_launcher_bg.webp` 纯色背景
+
 ## [0.6.1] - 2026-08-30
 
 ### Changed
