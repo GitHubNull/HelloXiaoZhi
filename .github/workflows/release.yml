@@ -11,11 +11,13 @@ name: Release
 
 on:
   push:
-    tags: ['[0-9]+.[0-9]+.[0-9]+*']
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. 1.2.0)'
+        description: '语义化版本号（必填，不带 v 前缀），例如 1.2.0 或 1.2.0-beta.1'
         required: true
 
 permissions:
@@ -49,7 +51,16 @@ jobs:
       - name: Resolve tag
         id: tag
         run: |
-          TAG="${{ github.event.inputs.version || github.ref_name }}"
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              TAG="${{ github.event.inputs.version }}"
+              # 归一化：去掉误输入的 v 前缀，与无前缀标签规范保持一致
+              TAG="${TAG#v}"
+              ;;
+            *)
+              TAG="${{ github.ref_name }}"
+              ;;
+          esac
           echo "name=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build Release APK + AAB
