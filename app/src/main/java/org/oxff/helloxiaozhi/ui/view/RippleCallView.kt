@@ -18,7 +18,6 @@ import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * 水波涟漪通话动画，逐段移植设计稿 call.js 的 drawPool / drawBall / geom /
@@ -62,9 +61,14 @@ class RippleCallView @JvmOverloads constructor(
         }
     }
 
-    /** 设置音频强度（0-1），用于驱动球体震动 */
-    fun setAudioIntensity(intensity: Float) {
-        audioIntensity = intensity.coerceIn(0f, 1f)
+    /** 设置用户音频强度（0-1），驱动用户球体震动 */
+    fun setUserAudioIntensity(intensity: Float) {
+        userAudioIntensity = intensity.coerceIn(0f, 1f)
+    }
+
+    /** 设置 AI 音频强度（0-1），驱动 AI 球体震动 */
+    fun setAiAudioIntensity(intensity: Float) {
+        aiAudioIntensity = intensity.coerceIn(0f, 1f)
     }
 
     /** 小屏纯动画全屏模式：收窄水波边缘留白，让动画铺满 */
@@ -127,7 +131,10 @@ class RippleCallView @JvmOverloads constructor(
     private val ripples = ArrayList<Ripple>()
     private var lastRippleAi = 0L
     private var lastRippleUser = 0L
-    private var audioIntensity = 0f
+    @Volatile
+    private var userAudioIntensity = 0f
+    @Volatile
+    private var aiAudioIntensity = 0f
 
     private var running = false
     private var lastFrameNanos = 0L
@@ -203,25 +210,26 @@ class RippleCallView @JvmOverloads constructor(
     }
 
     private fun updateBall(ball: Ball, cx: Float, cy: Float, now: Long, isAi: Boolean) {
+        val intensity = if (isAi) aiAudioIntensity else userAudioIntensity
         if (ball.speaking) {
             // 使用音频强度驱动球体震动
             // 公式：sinkDepth = intensity^0.6 * 1.1，然后限制在 0-1 范围
-            val amplifiedIntensity = audioIntensity.pow(0.6f) * 1.1f
+            val amplifiedIntensity = intensity.pow(0.6f) * 1.1f
             ball.sinkDepth = min(1f, maxOf(0f, amplifiedIntensity))
 
             // 根据音频强度动态调整涟漪生成频率和幅度
             val lastRipple = if (isAi) lastRippleAi else lastRippleUser
-            val rippleInterval = maxOf(30f, 150f - audioIntensity * 150f).toLong()
+            val rippleInterval = maxOf(30f, 150f - intensity * 150f).toLong()
             
             if (now - lastRipple > rippleInterval) {
-                val rippleAmp = 0.3f + audioIntensity * 1.2f
-                spawnRipple(cx, cy, geom().maxRippleR, rippleAmp)
+                val rippleAmp = 0.3f + intensity * 1.2f
+                spawnRipple(cx, cy, geom().maxRippleR, rippleAmp, intensity)
                 if (isAi) lastRippleAi = now else lastRippleUser = now
             }
 
             // 音乐节奏强烈时额外产生涟漪
-            if (audioIntensity > 0.6f && now - lastRipple > 60) {
-                spawnRipple(cx, cy, geom().maxRippleR * 0.8f, 0.8f)
+            if (intensity > 0.6f && now - lastRipple > 60) {
+                spawnRipple(cx, cy, geom().maxRippleR * 0.8f, 0.8f, intensity)
                 if (isAi) lastRippleAi = now else lastRippleUser = now
             }
         } else {
@@ -229,10 +237,16 @@ class RippleCallView @JvmOverloads constructor(
             // 非说话方逐渐浮回
             ball.sinkDepth = maxOf(ball.sinkDepth * 0.92f, 0f)
         }
+        // 非说话方的强度自动衰减，避免残留
+        if (!ball.speaking) {
+            if (isAi) aiAudioIntensity *= 0.85f else userAudioIntensity *= 0.85f
+        }
     }
 
-    private fun spawnRipple(cx: Float, cy: Float, maxR: Float, amp: Float) {
-        ripples.add(Ripple(cx, cy, maxR, amp, 60f + Random.nextFloat() * 15f, System.currentTimeMillis()))
+    private fun spawnRipple(cx: Float, cy: Float, maxR: Float, amp: Float, intensity: Float) {
+        // 涟漪速度由音频强度确定性驱动：强度越大速度越快
+        val speed = 50f + intensity * 40f
+        ripples.add(Ripple(cx, cy, maxR, amp, speed, System.currentTimeMillis()))
     }
 
     // ---------------- 几何 ----------------

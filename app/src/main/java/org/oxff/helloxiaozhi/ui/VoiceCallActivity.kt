@@ -256,8 +256,12 @@ class VoiceCallActivity : AppCompatActivity() {
             historyList.scrollToPosition(historyAdapter.itemCount - 1)
         }
         controller.onUserWaveLevel = { level ->
-            // 将音频电平传递给水波动画
-            rippleView.setAudioIntensity(level)
+            // 用户说话电平驱动用户球体水波动画
+            rippleView.setUserAudioIntensity(level)
+        }
+        controller.onAiWaveLevel = { level ->
+            // AI 说话电平驱动 AI 球体水波动画
+            rippleView.setAiAudioIntensity(level)
         }
         controller.onError = { message ->
             toastHost.show(message, ToastHost.Kind.ERROR)
@@ -269,6 +273,7 @@ class VoiceCallActivity : AppCompatActivity() {
         controller.onChatStateChanged = null
         controller.onChatMessage = null
         controller.onUserWaveLevel = null
+        controller.onAiWaveLevel = null
         controller.onError = null
     }
 

@@ -4,6 +4,22 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.8.0] - 2026-09-03
+
+### Added
+
+- 通话页水波动画改为双球独立驱动：用户球体由用户语音电平驱动，AI 球体由 AI 播放音频电平驱动（`RippleCallView` 新增 `setUserAudioIntensity` / `setAiAudioIntensity`）
+- 新增 `XiaoZhiController.onAiWaveLevel` 回调：播放 AI 音频帧时计算 RMS 电平，供通话页 AI 球体动画使用
+
+### Changed
+
+- 涟漪生成由随机速度改为确定性驱动：涟漪速度由音频强度决定（强度越大速度越快），移除 `Random` 依赖
+- `VoiceCallActivity` 将用户/AI 电平分别路由至 `RippleCallView` 两个球体的强度接口
+
+### Fixed
+
+- 非说话方球体音频强度自动衰减（×0.85），避免残留在非说话球体上
+
 ## [0.7.0] - 2026-09-03
 
 ### Added

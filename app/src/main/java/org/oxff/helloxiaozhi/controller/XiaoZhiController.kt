@@ -37,6 +37,7 @@ import org.oxff.helloxiaozhi.data.Bot
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.net.OtaClient
 import org.oxff.helloxiaozhi.net.XiaoZhiWebSocket
+import org.oxff.helloxiaozhi.util.AudioMath
 import org.oxff.helloxiaozhi.util.HandlerExecutor
 import org.oxff.helloxiaozhi.util.HandlerSilenceScheduler
 import java.text.SimpleDateFormat
@@ -164,6 +165,7 @@ class XiaoZhiController(
     var onChatMessage: ((botId: String, message: ChatMessage) -> Unit)? = null
     var onChatStateChanged: ((ChatState) -> Unit)? = null
     var onUserWaveLevel: ((Float) -> Unit)? = null
+    var onAiWaveLevel: ((Float) -> Unit)? = null
 
     /** 官方模式需要激活时回调（code 为 6 位验证码） */
     var onActivationCodeRequired: ((String) -> Unit)? = null
@@ -502,8 +504,11 @@ class XiaoZhiController(
      * 延迟 300ms 可让服务器端 VAD 有足够时间处理完用户语音，避免自问自答。
      */
     private fun scheduleAudioFrame(pcm: ShortArray) {
+        // 计算 AI 播放音频的电平（RMS），用于驱动通话页水波动画
+        val aiLevel = AudioMath.rmsLevel(pcm)
         mainHandler.postDelayed({
             player.enqueue(pcm)
+            onAiWaveLevel?.invoke(aiLevel)
             if (stateMachine.state == ChatState.IDLE) {
                 stateMachine.setState(ChatState.AI_SPEAKING)
             }
