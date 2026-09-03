@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  通话页状态浮层背景：半透明胶囊。
+  取毛玻璃层色 xz_bg_blur 的 50% alpha（#80FAF6ED）：淡暖黄宣纸底上保持
+  深色文字可读，同时让下方涟漪动画隐约透出，仅做"能区分"的轻量视觉分隔。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/xz_radius_pill" />
+    <solid android:color="#80FAF6ED" />
+</shape>

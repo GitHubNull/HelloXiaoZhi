@@ -1,58 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 语音通话页（对应设计稿 call.html）：状态 + 计时 → 水波涟漪动画 → 历史 → 三按钮控制栏 -->
+<!--
+  语音通话页（对应设计稿 call.html）：状态浮层 + 水波涟漪动画 → 历史 → 三按钮控制栏。
+  小屏空间优化：顶部文字/动画切换栏移除（双击动画区域切换），
+  动画区域背景透明化（无厚重边框），状态块半透明浮层贴在动画区上边缘。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/xz_bg_deep"
     android:orientation="vertical">
-
-    <!-- 顶部：视图切换按钮（文字/动画） -->
-    <LinearLayout
-        android:id="@+id/top_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:paddingTop="@dimen/call_top_pad_t"
-        android:paddingBottom="@dimen/call_top_pad_b">
-
-        <FrameLayout
-            android:id="@+id/view_toggle"
-            android:layout_width="@dimen/call_toggle_w"
-            android:layout_height="@dimen/call_toggle_h"
-            android:background="@drawable/bg_view_switch">
-
-            <TextView
-                android:id="@+id/vs_label_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="start|center_vertical"
-                android:layout_marginStart="@dimen/call_toggle_label_margin"
-                android:text="@string/call_view_text"
-                android:textColor="@color/xz_text_hint"
-                android:textSize="@dimen/call_toggle_label_ts"
-                android:letterSpacing="0.09" />
-
-            <TextView
-                android:id="@+id/vs_label_anim"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="end|center_vertical"
-                android:layout_marginEnd="@dimen/call_toggle_label_margin"
-                android:text="@string/call_view_anim"
-                android:textColor="@color/xz_primary"
-                android:textSize="@dimen/call_toggle_label_ts"
-                android:letterSpacing="0.09" />
-
-            <View
-                android:id="@+id/vs_thumb"
-                android:layout_width="@dimen/call_thumb_w"
-                android:layout_height="@dimen/call_thumb_h"
-                android:layout_gravity="center_vertical|end"
-                android:layout_marginEnd="@dimen/call_thumb_margin"
-                android:background="@drawable/bg_view_switch_thumb" />
-        </FrameLayout>
-    </LinearLayout>
 
     <!-- 中间：动画/文字互斥区域 -->
     <FrameLayout
@@ -71,41 +27,13 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- 状态与计时 -->
-            <LinearLayout
-                android:id="@+id/status_block"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingTop="@dimen/call_state_pad_t"
-                android:paddingBottom="@dimen/call_state_pad_b">
-
-                <TextView
-                    android:id="@+id/call_timer"
-                    style="@style/Xz.Text.MonoTimer"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/call_timer_zero" />
-
-                <TextView
-                    android:id="@+id/call_state"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/call_state_margin_t"
-                    android:text="@string/call_connecting"
-                    android:textColor="@color/xz_text_secondary"
-                    android:textSize="@dimen/call_state_ts"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- 水波涟漪动画 -->
+            <!-- 水波涟漪动画：背景透明，仅以内容与周边区分，无厚重边框 -->
             <FrameLayout
                 android:id="@+id/pool_frame"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_panel_translucent"
+                android:background="@android:color/transparent"
                 android:padding="@dimen/call_pool_pad">
 
                 <org.oxff.helloxiaozhi.ui.view.RippleCallView
@@ -115,15 +43,56 @@
             </FrameLayout>
         </LinearLayout>
 
-        <!-- 文字历史面板（默认隐藏） -->
+        <!-- 文字历史面板（默认隐藏）：同样透明背景，把像素让给列表本身 -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/call_history"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@drawable/bg_panel_translucent"
+            android:background="@android:color/transparent"
             android:clipToPadding="false"
             android:padding="12dp"
             android:visibility="gone" />
+
+        <!-- 状态浮层：计时 + 状态合并一行，半透明胶囊浮在动画区上边缘 -->
+        <LinearLayout
+            android:id="@+id/status_block"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/bg_status_float"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="@dimen/call_state_pad_t"
+            android:paddingEnd="8dp"
+            android:paddingBottom="@dimen/call_state_pad_b">
+
+            <TextView
+                android:id="@+id/call_timer"
+                style="@style/Xz.Text.MonoTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/call_timer_zero" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="·"
+                android:textColor="@color/xz_text_hint"
+                android:textSize="@dimen/call_state_ts" />
+
+            <TextView
+                android:id="@+id/call_state"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/call_connecting"
+                android:textColor="@color/xz_text_secondary"
+                android:textSize="@dimen/call_state_ts"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <!-- 小屏进入倒计时弹窗：停留完整界面 8 秒后自动收起为纯动画界面 -->
         <LinearLayout

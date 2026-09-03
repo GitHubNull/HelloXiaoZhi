@@ -443,14 +443,16 @@ class RippleCallView @JvmOverloads constructor(
 
     private val BALL_R = 17f * density
     private val COL_W = 14f * density
-    private val CORNER = 14f * density
+    // 圆角收小：贴边绘制时大圆角会在四角留出明显空白
+    private val CORNER = 6f * density
     private val WAVE_BAND = 16f * density
 
     private companion object {
         const val MAX_RIPPLES = 60
         const val FRAME_MS = 33L // 30fps
         const val FRAME_S = 1f / 30f
-        const val DEFAULT_PAD_X = 18f
-        const val DEFAULT_PAD_Y = 14f
+        // 小屏空间优化：水波几乎贴边绘制，仅留 2px 容纳描边，避免左右/底部大片留白
+        const val DEFAULT_PAD_X = 2f
+        const val DEFAULT_PAD_Y = 2f
     }
 }

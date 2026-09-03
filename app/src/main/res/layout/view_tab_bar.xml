@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 底部 Tab 栏：聊天 / 通讯录 / 设置（对应设计稿 .tab-bar） -->
+<!-- 底部 Tab 栏：聊天 / 通讯录 / 设置（对应设计稿 .tab-bar）。
+     小屏空间优化：上下 padding 压缩，图标文字整体贴近屏幕下边缘。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -14,8 +15,8 @@
         android:layout_weight="1"
         android:gravity="center"
         android:orientation="vertical"
-        android:paddingTop="8dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
         android:background="?attr/selectableItemBackground">
 
         <!-- 容器随角标自适应生长（无角标时仍为 24dp），避免角标多位数字被测量钳制/裁剪 -->
@@ -33,12 +34,21 @@
                 android:src="@drawable/ic_tab_chat"
                 android:tint="@color/xz_text_hint" />
 
+            <!-- 连接状态圆点：导航栏移除后由 MainActivity.updateStatus 按 ConnectionStatus 改色 -->
+            <View
+                android:id="@+id/tab_status_dot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_gravity="top|end"
+                android:background="@drawable/bg_status_dot" />
+
             <TextView
                 android:id="@+id/tab_chat_badge"
                 android:layout_width="wrap_content"
                 android:layout_height="16dp"
                 android:layout_gravity="top|end"
                 android:layout_marginStart="14dp"
+                android:layout_marginEnd="10dp"
                 android:minWidth="16dp"
                 android:background="@drawable/bg_pill_error"
                 android:gravity="center"
@@ -66,8 +76,8 @@
         android:layout_weight="1"
         android:gravity="center"
         android:orientation="vertical"
-        android:paddingTop="8dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
         android:background="?attr/selectableItemBackground">
 
         <ImageView
@@ -93,8 +103,8 @@
         android:layout_weight="1"
         android:gravity="center"
         android:orientation="vertical"
-        android:paddingTop="8dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="2dp"
         android:background="?attr/selectableItemBackground">
 
         <ImageView

@@ -4,6 +4,23 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.0] - 2026-09-03
+
+### Added
+
+- 新增 `OrientationPolicy`：原生横屏小面板（脸屏类真机）在 Activity 层显式请求横屏，避开厂商 ROM 强开传感器旋转导致被锁成竖屏
+- 新增通话页状态浮层半透明胶囊背景 `bg_status_float.xml`（毛玻璃层色 50% alpha）
+
+### Changed
+
+- 移除主界面顶部导航栏（删除 `view_nav_bar.xml`），连接状态改由 Tab 栏聊天图标上的状态圆点指示
+- 移除通话页顶部文字/动画切换栏，改为双击动画区域触发文字/动画模式切换
+- 水波动画贴边绘制：`RippleCallView` 圆角收小（14dp→6dp）、边距缩小（18→2dp），减少左右/底部留白
+
+### Fixed
+
+- 修复 alps Visbot 等小屏原生横屏真机进入语音通话页时触发多次旋转动画的问题：`VoiceCallActivity` 在 manifest 静态声明 `screenOrientation="behind"` 继承 MainActivity 方向，移除其在 `onCreate()` 中的动态 `setRequestedOrientation` 调用，避免「窗口创建→配置变更」两阶段旋转；`OrientationPolicy` 在 API 23+ 改用 `Display.getMode()` 的物理面板尺寸判定原生方向，绕开厂商 ROM 把 natural orientation 上报为竖屏导致 `Display.getRotation()` 启发式误判的问题
+
 ## [0.8.0] - 2026-09-03
 
 ### Added

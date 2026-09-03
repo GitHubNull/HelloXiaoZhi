@@ -31,6 +31,7 @@
             android:name=".ui.VoiceCallActivity"
             android:exported="false"
             android:label="@string/voice_call_title"
+            android:screenOrientation="behind"
             android:theme="@style/Theme.HelloXiaoZhi.VoiceCall" />
     </application>
 

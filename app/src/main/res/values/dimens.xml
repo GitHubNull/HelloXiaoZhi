@@ -30,13 +30,14 @@
     <dimen name="xz_gutter">18dp</dimen>
     <dimen name="xz_gutter_sm">14dp</dimen>
     <dimen name="xz_card_padding_h">16dp</dimen>
-    <dimen name="xz_card_padding_v">18dp</dimen>
+    <dimen name="xz_card_padding_v">12dp</dimen>
 
     <!--
       targetSdk 27 下没有 WindowInsets / display cutout API，
       env(safe-area-inset-bottom) 无等价物，底部用固定内边距兜底。
+      小屏空间优化：14dp → 4dp，Tab 栏贴近屏幕下边缘。
     -->
-    <dimen name="xz_safe_bottom">14dp</dimen>
+    <dimen name="xz_safe_bottom">4dp</dimen>
 
     <!-- 星河画布高度（#pool-canvas { height: 170px }） -->
     <dimen name="xz_starfield_height">170dp</dimen>
@@ -54,14 +55,14 @@
     <dimen name="call_thumb_w">38dp</dimen>
     <dimen name="call_thumb_h">17dp</dimen>
     <dimen name="call_thumb_margin">2dp</dimen>
-    <dimen name="call_state_pad_t">6dp</dimen>
-    <dimen name="call_state_pad_b">4dp</dimen>
+    <dimen name="call_state_pad_t">2dp</dimen>
+    <dimen name="call_state_pad_b">2dp</dimen>
     <dimen name="call_timer_ts">10sp</dimen>
     <dimen name="call_state_ts">13sp</dimen>
     <dimen name="call_state_margin_t">2dp</dimen>
-    <dimen name="call_side_pad">6dp</dimen>
-    <dimen name="call_pool_pad">4dp</dimen>
-    <dimen name="call_bar_pad_v">6dp</dimen>
+    <dimen name="call_side_pad">0dp</dimen>
+    <dimen name="call_pool_pad">0dp</dimen>
+    <dimen name="call_bar_pad_v">2dp</dimen>
     <dimen name="call_ctrl_btn">30dp</dimen>
     <dimen name="call_ctrl_icon">13dp</dimen>
     <dimen name="call_hangup_btn">40dp</dimen>

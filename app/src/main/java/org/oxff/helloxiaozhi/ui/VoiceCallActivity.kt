@@ -24,7 +24,8 @@ import org.oxff.helloxiaozhi.util.TimeFormat
 /**
  * 语音通话页（对应设计稿 call.html）：
  * 水波涟漪动画（单球由真实 ChatState 驱动）+ 通话计时 + 历史记录 +
- * 三按钮控制栏（机器人增益 / 挂断 / 你的增益）+ 文字/动画切换。
+ * 三按钮控制栏（机器人增益 / 挂断 / 你的增益）。
+ * 文字/动画视图切换由双击动画区域触发（小屏空间优化移除了顶部切换栏）。
  */
 class VoiceCallActivity : AppCompatActivity() {
 
@@ -35,11 +36,6 @@ class VoiceCallActivity : AppCompatActivity() {
     private lateinit var historyList: RecyclerView
     private lateinit var toastHost: ToastHost
     private lateinit var animPanel: View
-    private lateinit var viewToggle: View
-    private lateinit var vsThumb: View
-    private lateinit var vsLabelText: TextView
-    private lateinit var vsLabelAnim: TextView
-    private lateinit var topRow: View
     private lateinit var statusBlock: View
     private lateinit var bottomBar: View
     private lateinit var middleArea: View
@@ -66,6 +62,10 @@ class VoiceCallActivity : AppCompatActivity() {
     private var sidePadPx = 0
     private var poolPadPx = 0
     private var poolBg: android.graphics.drawable.Drawable? = null
+    // 完整界面下双击动画区域切换文字/动画（替代已移除的顶部切换栏）
+    private var expandedTapCount = 0
+    private var lastExpandedTapMs = 0L
+    private val middleRect = android.graphics.Rect()
     private val expandRunnable = Runnable {
         tapCount = 0
         expand()
@@ -80,6 +80,9 @@ class VoiceCallActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 方向由 manifest screenOrientation="behind" 继承 MainActivity
+        // （MainActivity 已通过 OrientationPolicy 在小屏原生横屏真机上锁定 landscape），
+        // 避免在 onCreate 中动态 setRequestedOrientation 触发「窗口创建→配置变更」两阶段旋转动画。
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_voice_call)
         controller = (application as XiaoZhiApp).controller
@@ -116,11 +119,30 @@ class VoiceCallActivity : AppCompatActivity() {
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         // 纯动画界面下整个窗口即动画区域：在窗口最上游捕获点击，
-        // 不依赖子 View 命中测试，连点 2 次恢复完整界面、3 次挂断回主页
+        // 不依赖子 View 命中测试，连点 2 次恢复完整界面、3 次挂断回主页。
+        // 完整界面下双击动画/文字区域切换文字/动画；只计数不拦截事件，
+        // 增益弹层收起等子 View 点击不受影响。
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            if (collapsed) onCollapsedTap()
+            if (collapsed) onCollapsedTap() else onExpandedTap(ev)
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** 完整界面双击切换文字/动画：仅响应 middle_area 内的点击，避免误触底部控制栏按钮 */
+    private fun onExpandedTap(ev: MotionEvent) {
+        middleArea.getGlobalVisibleRect(middleRect)
+        if (!middleRect.contains(ev.rawX.toInt(), ev.rawY.toInt())) {
+            expandedTapCount = 0
+            return
+        }
+        val now = SystemClock.uptimeMillis()
+        if (now - lastExpandedTapMs > TAP_WINDOW_MS) expandedTapCount = 0
+        lastExpandedTapMs = now
+        expandedTapCount++
+        if (expandedTapCount >= 2) {
+            expandedTapCount = 0
+            toggleView()
+        }
     }
 
     // ---------------- 视图绑定 ----------------
@@ -131,11 +153,6 @@ class VoiceCallActivity : AppCompatActivity() {
         callTimer = findViewById(R.id.call_timer)
         historyList = findViewById(R.id.call_history)
         animPanel = findViewById(R.id.anim_panel)
-        viewToggle = findViewById(R.id.view_toggle)
-        vsThumb = findViewById(R.id.vs_thumb)
-        vsLabelText = findViewById(R.id.vs_label_text)
-        vsLabelAnim = findViewById(R.id.vs_label_anim)
-        topRow = findViewById(R.id.top_row)
         statusBlock = findViewById(R.id.status_block)
         bottomBar = findViewById(R.id.bottom_bar)
         middleArea = findViewById(R.id.middle_area)
@@ -153,10 +170,7 @@ class VoiceCallActivity : AppCompatActivity() {
         historyList.adapter = historyAdapter
 
         findViewById<View>(R.id.btn_hangup).setOnClickListener { hangUp() }
-        
-        // 视图切换
-        viewToggle.setOnClickListener { toggleView() }
-        
+
         // 初始 progress 与 recorder 实际默认值对齐（布局默认 70 会造成
         // 「显示与实际不符」的迷惑）：50% = 1.0x / 0dB
         setupGainPopover(
@@ -216,28 +230,11 @@ class VoiceCallActivity : AppCompatActivity() {
 
     // ---------------- 视图切换 ----------------
 
+    /** 文字/动画互斥切换：顶部切换栏移除后由双击动画区域触发 */
     private fun toggleView() {
         isAnimMode = !isAnimMode
-        if (isAnimMode) {
-            // 切换到动画模式
-            animPanel.visibility = View.VISIBLE
-            historyList.visibility = View.GONE
-            vsLabelAnim.setTextColor(getColor(R.color.xz_primary))
-            vsLabelText.setTextColor(getColor(R.color.xz_text_hint))
-            // 滑块移动到动画侧
-            vsThumb.animate().translationX(0f).setDuration(250).start()
-        } else {
-            // 切换到文字模式
-            animPanel.visibility = View.GONE
-            historyList.visibility = View.VISIBLE
-            vsLabelText.setTextColor(getColor(R.color.xz_primary))
-            vsLabelAnim.setTextColor(getColor(R.color.xz_text_hint))
-            // 滑块移动到文字侧
-            val thumbWidth = vsThumb.width.toFloat()
-            val containerWidth = viewToggle.width.toFloat()
-            val thumbMargin = resources.getDimensionPixelSize(R.dimen.call_thumb_margin).toFloat()
-            vsThumb.animate().translationX(-(containerWidth - thumbWidth - 2f * thumbMargin)).setDuration(250).start()
-        }
+        animPanel.visibility = if (isAnimMode) View.VISIBLE else View.GONE
+        historyList.visibility = if (isAnimMode) View.GONE else View.VISIBLE
     }
 
     // ---------------- Controller 回调 ----------------
@@ -360,7 +357,6 @@ class VoiceCallActivity : AppCompatActivity() {
         countdownTimer?.cancel()
         countdownOverlay.visibility = View.GONE
         if (!isAnimMode) toggleView()
-        topRow.visibility = View.GONE
         statusBlock.visibility = View.GONE
         bottomBar.visibility = View.GONE
         middleArea.setPadding(0, 0, 0, 0)
@@ -374,7 +370,6 @@ class VoiceCallActivity : AppCompatActivity() {
         if (!collapsed) return
         android.util.Log.i(TAG, "expand")
         collapsed = false
-        topRow.visibility = View.VISIBLE
         statusBlock.visibility = View.VISIBLE
         bottomBar.visibility = View.VISIBLE
         middleArea.setPadding(sidePadPx, 0, sidePadPx, 0)

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   三 Tab 外壳（对应设计稿 index.html 的 .phone-frame > .app-body）：
-  导航栏 → Tab 内容区（三个页面 + 对话详情滑入层）→ Tab 栏 → 模态框宿主 → Toast 宿主。
+  Tab 内容区（三个页面 + 对话详情滑入层）→ Tab 栏 → 模态框宿主 → Toast 宿主。
+  小屏空间优化：顶部导航栏已移除，连接状态改由 Tab 栏聊天图标上的状态圆点指示。
   层叠顺序即子 View 顺序：Tab 内容 < Tab 栏 < 对话详情 < 模态框 < Toast。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -13,8 +14,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
-
-        <include layout="@layout/view_nav_bar" />
 
         <FrameLayout
             android:id="@+id/tab_content"

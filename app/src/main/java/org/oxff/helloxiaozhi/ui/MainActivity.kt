@@ -25,10 +25,12 @@ import org.oxff.helloxiaozhi.ui.page.SettingsPageController
 import org.oxff.helloxiaozhi.ui.view.ModalHost
 import org.oxff.helloxiaozhi.ui.view.SlideInContainer
 import org.oxff.helloxiaozhi.ui.view.ToastHost
+import org.oxff.helloxiaozhi.util.OrientationPolicy
 
 /**
  * 三 Tab 外壳（对应设计稿 index.html）：
- * 顶部导航栏 + 聊天/通讯录/设置三个 Tab + 对话详情滑入层 + 模态框/Toast 宿主。
+ * 聊天/通讯录/设置三个 Tab + 对话详情滑入层 + 模态框/Toast 宿主。
+ * 小屏空间优化后顶部导航栏已移除，连接状态由 Tab 栏聊天图标上的状态圆点指示。
  *
  * 所有 controller 回调集中在此绑定，再分发给各页面控制器——
  * 避免多个页面争抢单槽回调导致后绑定者胜出、先绑定者静默失效。
@@ -55,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private enum class Tab { CHAT, CONTACTS, SETTINGS }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 原生横屏小面板（脸屏类真机）显式请求横屏，避开厂商 ROM 强开传感器旋转
+        OrientationPolicy.lockIfNeeded(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -251,17 +255,18 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 状态与渲染 ----------------
 
+    /**
+     * 连接状态指示：顶部导航栏移除后，改由 Tab 栏聊天图标上的状态圆点变色。
+     * 圆点与未读角标分居图标两角（角标 top|end 左移 10dp 避让），不会互相遮挡。
+     */
     private fun updateStatus(status: ConnectionStatus) {
-        val (textRes, colorRes) = when (status) {
-            ConnectionStatus.CONNECTED -> R.string.status_connected to R.color.xz_status_connected
-            ConnectionStatus.CONNECTING -> R.string.status_connecting to R.color.xz_status_connecting
-            ConnectionStatus.DISCONNECTED -> R.string.status_disconnected to R.color.xz_status_disconnected
-            ConnectionStatus.ERROR -> R.string.status_error to R.color.xz_status_error
+        val colorRes = when (status) {
+            ConnectionStatus.CONNECTED -> R.color.xz_status_connected
+            ConnectionStatus.CONNECTING -> R.color.xz_status_connecting
+            ConnectionStatus.DISCONNECTED -> R.color.xz_status_disconnected
+            ConnectionStatus.ERROR -> R.color.xz_status_error
         }
-        findViewById<TextView>(R.id.status_text).setText(textRes)
-        findViewById<TextView>(R.id.status_text)
-            .setTextColor(ContextCompat.getColor(this, colorRes))
-        (findViewById<View>(R.id.status_dot).background as? android.graphics.drawable.GradientDrawable)
+        (findViewById<View>(R.id.tab_status_dot).background as? android.graphics.drawable.GradientDrawable)
             ?.setColor(ContextCompat.getColor(this, colorRes))
     }
 
