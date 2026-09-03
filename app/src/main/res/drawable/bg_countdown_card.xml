@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小屏进入倒计时弹窗卡片：宣纸底色 + 水波描边 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/xz_bg_card" />
+    <corners android:radius="@dimen/xz_radius_md" />
+    <stroke
+        android:width="@dimen/xz_stroke"
+        android:color="@color/xz_water_edge" />
+</shape>

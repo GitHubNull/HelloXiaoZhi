@@ -1,8 +1,11 @@
 package org.oxff.helloxiaozhi.ui
 
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
@@ -14,29 +17,59 @@ import org.oxff.helloxiaozhi.XiaoZhiApp
 import org.oxff.helloxiaozhi.chat.ChatState
 import org.oxff.helloxiaozhi.controller.XiaoZhiController
 import org.oxff.helloxiaozhi.data.StoredMessage
-import org.oxff.helloxiaozhi.ui.view.StarfieldCallView
+import org.oxff.helloxiaozhi.ui.view.RippleCallView
 import org.oxff.helloxiaozhi.ui.view.ToastHost
 import org.oxff.helloxiaozhi.util.TimeFormat
 
 /**
  * 语音通话页（对应设计稿 call.html）：
- * 二进制星河动画（双球由真实 ChatState 驱动）+ 通话计时 + 历史记录 +
- * 三按钮控制栏（机器人增益 / 挂断 / 你的增益）。
+ * 水波涟漪动画（单球由真实 ChatState 驱动）+ 通话计时 + 历史记录 +
+ * 三按钮控制栏（机器人增益 / 挂断 / 你的增益）+ 文字/动画切换。
  */
 class VoiceCallActivity : AppCompatActivity() {
 
     private lateinit var controller: XiaoZhiController
-    private lateinit var starfield: StarfieldCallView
+    private lateinit var rippleView: RippleCallView
     private lateinit var callState: TextView
     private lateinit var callTimer: TextView
     private lateinit var historyList: RecyclerView
     private lateinit var toastHost: ToastHost
+    private lateinit var animPanel: View
+    private lateinit var viewToggle: View
+    private lateinit var vsThumb: View
+    private lateinit var vsLabelText: TextView
+    private lateinit var vsLabelAnim: TextView
+    private lateinit var topRow: View
+    private lateinit var statusBlock: View
+    private lateinit var bottomBar: View
+    private lateinit var middleArea: View
+    private lateinit var poolFrame: View
+    private lateinit var countdownOverlay: View
+    private lateinit var countdownText: TextView
 
     private val historyAdapter = MessageAdapter()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var callSeconds = 0
     private var callStarted = false
+    private var isAnimMode = true // true=动画模式，false=文字模式
+
+    // ---------------- 小屏专属优化状态 ----------------
+    /** 小屏判定：本机 308x240@120dpi = 410x320dp，sw=320dp；普通手机 sw>=360dp 不受影响 */
+    private val isSmallScreen by lazy {
+        resources.configuration.smallestScreenWidthDp < SMALL_SCREEN_SW_DP
+    }
+    private var collapsed = false // 纯动画界面模式
+    private var tapCount = 0
+    private var lastTapMs = 0L
+    private var countdownTimer: CountDownTimer? = null
+    private var sidePadPx = 0
+    private var poolPadPx = 0
+    private var poolBg: android.graphics.drawable.Drawable? = null
+    private val expandRunnable = Runnable {
+        tapCount = 0
+        expand()
+    }
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (!callStarted) return
@@ -54,22 +87,25 @@ class VoiceCallActivity : AppCompatActivity() {
         bindViews()
         bindController()
         startCall()
+        if (isSmallScreen) setupSmallScreenMode()
     }
 
     override fun onResume() {
         super.onResume()
-        starfield.start()
+        rippleView.start()
     }
 
     override fun onPause() {
         super.onPause()
         // 锁屏 / 退后台即停动画，避免烧 CPU
-        starfield.stop()
+        rippleView.stop()
     }
 
     override fun onDestroy() {
         unbindController()
         mainHandler.removeCallbacks(timerRunnable)
+        mainHandler.removeCallbacks(expandRunnable)
+        countdownTimer?.cancel()
         super.onDestroy()
     }
 
@@ -78,13 +114,37 @@ class VoiceCallActivity : AppCompatActivity() {
         hangUp()
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        // 纯动画界面下整个窗口即动画区域：在窗口最上游捕获点击，
+        // 不依赖子 View 命中测试，连点 2 次恢复完整界面、3 次挂断回主页
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (collapsed) onCollapsedTap()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     // ---------------- 视图绑定 ----------------
 
     private fun bindViews() {
-        starfield = findViewById(R.id.starfield)
+        rippleView = findViewById(R.id.ripple_view)
         callState = findViewById(R.id.call_state)
         callTimer = findViewById(R.id.call_timer)
         historyList = findViewById(R.id.call_history)
+        animPanel = findViewById(R.id.anim_panel)
+        viewToggle = findViewById(R.id.view_toggle)
+        vsThumb = findViewById(R.id.vs_thumb)
+        vsLabelText = findViewById(R.id.vs_label_text)
+        vsLabelAnim = findViewById(R.id.vs_label_anim)
+        topRow = findViewById(R.id.top_row)
+        statusBlock = findViewById(R.id.status_block)
+        bottomBar = findViewById(R.id.bottom_bar)
+        middleArea = findViewById(R.id.middle_area)
+        poolFrame = findViewById(R.id.pool_frame)
+        countdownOverlay = findViewById(R.id.countdown_overlay)
+        countdownText = findViewById(R.id.countdown_text)
+        sidePadPx = resources.getDimensionPixelSize(R.dimen.call_side_pad)
+        poolPadPx = resources.getDimensionPixelSize(R.dimen.call_pool_pad)
+        poolBg = poolFrame.background
         toastHost = ToastHost(this).also {
             (findViewById<android.view.ViewGroup>(android.R.id.content)).addView(it)
         }
@@ -93,6 +153,10 @@ class VoiceCallActivity : AppCompatActivity() {
         historyList.adapter = historyAdapter
 
         findViewById<View>(R.id.btn_hangup).setOnClickListener { hangUp() }
+        
+        // 视图切换
+        viewToggle.setOnClickListener { toggleView() }
+        
         // 初始 progress 与 recorder 实际默认值对齐（布局默认 70 会造成
         // 「显示与实际不符」的迷惑）：50% = 1.0x / 0dB
         setupGainPopover(
@@ -150,6 +214,32 @@ class VoiceCallActivity : AppCompatActivity() {
         })
     }
 
+    // ---------------- 视图切换 ----------------
+
+    private fun toggleView() {
+        isAnimMode = !isAnimMode
+        if (isAnimMode) {
+            // 切换到动画模式
+            animPanel.visibility = View.VISIBLE
+            historyList.visibility = View.GONE
+            vsLabelAnim.setTextColor(getColor(R.color.xz_primary))
+            vsLabelText.setTextColor(getColor(R.color.xz_text_hint))
+            // 滑块移动到动画侧
+            vsThumb.animate().translationX(0f).setDuration(250).start()
+        } else {
+            // 切换到文字模式
+            animPanel.visibility = View.GONE
+            historyList.visibility = View.VISIBLE
+            vsLabelText.setTextColor(getColor(R.color.xz_primary))
+            vsLabelAnim.setTextColor(getColor(R.color.xz_text_hint))
+            // 滑块移动到文字侧
+            val thumbWidth = vsThumb.width.toFloat()
+            val containerWidth = viewToggle.width.toFloat()
+            val thumbMargin = resources.getDimensionPixelSize(R.dimen.call_thumb_margin).toFloat()
+            vsThumb.animate().translationX(-(containerWidth - thumbWidth - 2f * thumbMargin)).setDuration(250).start()
+        }
+    }
+
     // ---------------- Controller 回调 ----------------
 
     private fun bindController() {
@@ -165,6 +255,10 @@ class VoiceCallActivity : AppCompatActivity() {
             )
             historyList.scrollToPosition(historyAdapter.itemCount - 1)
         }
+        controller.onUserWaveLevel = { level ->
+            // 将音频电平传递给水波动画
+            rippleView.setAudioIntensity(level)
+        }
         controller.onError = { message ->
             toastHost.show(message, ToastHost.Kind.ERROR)
         }
@@ -174,6 +268,7 @@ class VoiceCallActivity : AppCompatActivity() {
     private fun unbindController() {
         controller.onChatStateChanged = null
         controller.onChatMessage = null
+        controller.onUserWaveLevel = null
         controller.onError = null
     }
 
@@ -195,20 +290,20 @@ class VoiceCallActivity : AppCompatActivity() {
             ChatState.USER_SPEAKING -> {
                 callState.text = getString(R.string.call_state_user)
                 callState.setTextColor(getColor(R.color.xz_primary))
-                starfield.setUserSpeaking(true)
-                starfield.setAiSpeaking(false)
+                rippleView.setUserSpeaking(true)
+                rippleView.setAiSpeaking(false)
             }
             ChatState.AI_SPEAKING -> {
                 callState.text = getString(R.string.call_state_ai, getString(R.string.call_label_ai))
                 callState.setTextColor(getColor(R.color.xz_accent_ai))
-                starfield.setUserSpeaking(false)
-                starfield.setAiSpeaking(true)
+                rippleView.setUserSpeaking(false)
+                rippleView.setAiSpeaking(true)
             }
             ChatState.IDLE -> {
                 callState.text = getString(R.string.call_state_idle)
                 callState.setTextColor(getColor(R.color.xz_text_secondary))
-                starfield.setUserSpeaking(false)
-                starfield.setAiSpeaking(false)
+                rippleView.setUserSpeaking(false)
+                rippleView.setAiSpeaking(false)
             }
         }
     }
@@ -219,4 +314,99 @@ class VoiceCallActivity : AppCompatActivity() {
         toastHost.show(getString(R.string.call_finished), ToastHost.Kind.NORMAL, 1200)
         mainHandler.postDelayed({ finish() }, 900)
     }
+
+    // ---------------- 小屏专属优化 ----------------
+
+    /**
+     * 小屏进入策略：前 [MAX_FULL_UI_ENTRIES] 次停留完整界面 8 秒（带倒计时弹窗），
+     * 之后自动收起为纯动画界面；超过次数后不再倒计时，直接进入纯动画界面。
+     */
+    private fun setupSmallScreenMode() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val entries = prefs.getInt(KEY_FULL_UI_ENTRIES, 0) + 1
+        prefs.edit().putInt(KEY_FULL_UI_ENTRIES, entries).apply()
+        android.util.Log.i(TAG, "onCreate small-screen entries=$entries")
+        if (entries > MAX_FULL_UI_ENTRIES) {
+            collapse()
+        } else {
+            showCollapseCountdown()
+        }
+    }
+
+    private fun showCollapseCountdown() {
+        countdownOverlay.visibility = View.VISIBLE
+        countdownTimer = object : CountDownTimer(COLLAPSE_DELAY_MS, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                val seconds = ((millisUntilFinished + 999) / 1000).toInt()
+                countdownText.text = getString(R.string.call_countdown_title, seconds)
+            }
+
+            override fun onFinish() {
+                countdownOverlay.visibility = View.GONE
+                collapse()
+            }
+        }.start()
+    }
+
+    /** 收起为纯动画界面：隐藏顶/底栏与状态块，涟漪铺满全屏 */
+    private fun collapse() {
+        if (collapsed) return
+        collapsed = true
+        countdownTimer?.cancel()
+        countdownOverlay.visibility = View.GONE
+        if (!isAnimMode) toggleView()
+        topRow.visibility = View.GONE
+        statusBlock.visibility = View.GONE
+        bottomBar.visibility = View.GONE
+        middleArea.setPadding(0, 0, 0, 0)
+        poolFrame.setPadding(0, 0, 0, 0)
+        poolFrame.background = null
+        rippleView.setEdgeInset(2f, 2f)
+    }
+
+    /** 退回完整功能界面（连点动画中心 2 次） */
+    private fun expand() {
+        if (!collapsed) return
+        android.util.Log.i(TAG, "expand")
+        collapsed = false
+        topRow.visibility = View.VISIBLE
+        statusBlock.visibility = View.VISIBLE
+        bottomBar.visibility = View.VISIBLE
+        middleArea.setPadding(sidePadPx, 0, sidePadPx, 0)
+        poolFrame.setPadding(poolPadPx, poolPadPx, poolPadPx, poolPadPx)
+        poolFrame.background = poolBg
+        rippleView.resetEdgeInset()
+    }
+
+    /** 纯动画界面下的点击：2 次→恢复完整界面；3 次→挂断并回到主页 */
+    private fun onCollapsedTap() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastTapMs > TAP_WINDOW_MS) tapCount = 0
+        lastTapMs = now
+        tapCount++
+        android.util.Log.i(TAG, "collapsedTap count=$tapCount")
+        when {
+            tapCount >= 3 -> {
+                mainHandler.removeCallbacks(expandRunnable)
+                tapCount = 0
+                hangUp()
+            }
+            tapCount == 2 ->
+                // 留一个窗口等第 3 次点击；未等到才恢复完整界面
+                mainHandler.postDelayed(expandRunnable, TRIPLE_TAP_GUARD_MS)
+        }
+    }
+
+    private companion object {
+        const val SMALL_SCREEN_SW_DP = 360
+        const val MAX_FULL_UI_ENTRIES = 3
+        const val COLLAPSE_DELAY_MS = 8000L
+        // 连点窗口放宽到 2s：小屏真机注入/操作间隔偏大，过严会导致连点永远不成立
+        const val TAP_WINDOW_MS = 2000L
+        const val TRIPLE_TAP_GUARD_MS = 500L
+        const val PREFS_NAME = "call_ui_prefs"
+        const val KEY_FULL_UI_ENTRIES = "full_ui_entries"
+        const val TAG = "VoiceCall"
+    }
 }
+

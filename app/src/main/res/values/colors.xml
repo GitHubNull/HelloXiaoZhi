@@ -1,81 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   设计令牌：逐条对应设计稿 assets/css/common.css 的 :root 变量。
+  淡暖黄色宣纸风格 + Material Design 交互规范。
   CSS rgba() 的 alpha 换算为 Android #AARRGGBB 前缀：0.12 → 1F，0.15 → 26，0.25 → 40。
 -->
 <resources>
-    <!-- 背景层 -->
-    <color name="xz_bg_deep">#FF0B0F19</color>
-    <color name="xz_bg_card">#FF151B2E</color>
-    <color name="xz_bg_bubble_ai">#FF1E2740</color>
-    <color name="xz_bg_input">#FF1A2238</color>
+    <!-- 背景层：淡暖黄色宣纸风格 -->
+    <color name="xz_bg_deep">#FFF5F0E1</color>
+    <color name="xz_bg_card">#FFFAF6ED</color>
+    <color name="xz_bg_bubble_ai">#FFF0E9D8</color>
+    <color name="xz_bg_input">#FFF5F0E1</color>
 
     <!--
       backdrop-filter: blur() 在 API 21 无等价实现（RenderEffect 是 API 31）。
       导航栏/Tab 栏/输入栏等毛玻璃层改用手工合成的不透明色。
     -->
-    <color name="xz_bg_blur">#FF141A2B</color>
-    <color name="xz_scrim">#B8050710</color>
+    <color name="xz_bg_blur">#FDFAF3</color>
+    <color name="xz_scrim">#802C1810</color>
 
     <!-- 主色与强调色 -->
-    <color name="xz_primary">#FF22D3EE</color>
-    <color name="xz_primary_dim">#2622D3EE</color>
-    <color name="xz_accent_ai">#FF818CF8</color>
+    <color name="xz_primary">#FF228FBD</color>
+    <color name="xz_primary_dim">#1F228FBD</color>
+    <color name="xz_accent_ai">#FF8B4513</color>
 
-    <!-- grad-user: linear-gradient(135deg, #2563EB, #22D3EE) -->
-    <color name="xz_grad_user_start">#FF2563EB</color>
-    <color name="xz_grad_user_end">#FF22D3EE</color>
+    <!-- grad-user: linear-gradient(135deg, #228FBD, #1A6B8A) -->
+    <color name="xz_grad_user_start">#FF228FBD</color>
+    <color name="xz_grad_user_end">#FF1A6B8A</color>
 
     <!-- 语义色 -->
-    <color name="xz_success">#FF34D399</color>
-    <color name="xz_error">#FFF87171</color>
-    <color name="xz_warning">#FFFBBF24</color>
+    <color name="xz_success">#FF2D5016</color>
+    <color name="xz_error">#FFDC2626</color>
+    <color name="xz_warning">#FFB8860B</color>
 
     <!-- 文字 -->
-    <color name="xz_text_primary">#FFF1F5F9</color>
-    <color name="xz_text_secondary">#FF94A3B8</color>
-    <color name="xz_text_hint">#FF64748B</color>
+    <color name="xz_text_primary">#FF2C1810</color>
+    <color name="xz_text_secondary">#FF5C4033</color>
+    <color name="xz_text_hint">#FF8B7355</color>
     <color name="xz_text_on_primary">#FFFFFFFF</color>
 
     <!-- 描边与分隔线 -->
-    <color name="xz_border_subtle">#1F94A3B8</color>
-    <color name="xz_border_focus">#FF22D3EE</color>
+    <color name="xz_border_subtle">#268B4513</color>
+    <color name="xz_border_focus">#FF228FBD</color>
 
-    <!-- 列表行按压态（对应 rgba(148,163,184,0.06/0.10)） -->
-    <color name="xz_row_pressed">#1A94A3B8</color>
+    <!-- 列表行按压态（对应 rgba(139,69,19,0.06/0.10)） -->
+    <color name="xz_row_pressed">#1A8B4513</color>
 
     <!-- 开关（.switch-track / .switch-thumb） -->
-    <color name="xz_switch_track_off">#4094A3B8</color>
-    <color name="xz_switch_track_on">#7322D3EE</color>
-    <color name="xz_switch_thumb_off">#FFCBD5E1</color>
+    <color name="xz_switch_track_off">#408B7355</color>
+    <color name="xz_switch_track_on">#59228FBD</color>
+    <color name="xz_switch_thumb_off">#FFD4C4A8</color>
 
-    <!-- 危险操作区（rgba(248,113,113,0.06/0.20/0.10/0.40)） -->
-    <color name="xz_danger_bg">#0FF87171</color>
-    <color name="xz_danger_border">#33F87171</color>
-    <color name="xz_danger_fill">#1AF87171</color>
-    <color name="xz_danger_stroke">#66F87171</color>
+    <!-- 危险操作区（rgba(220,38,38,0.06/0.20/0.10/0.40)） -->
+    <color name="xz_danger_bg">#0FDC2626</color>
+    <color name="xz_danger_border">#33DC2626</color>
+    <color name="xz_danger_fill">#1ADC2626</color>
+    <color name="xz_danger_stroke">#66DC2626</color>
 
-    <!-- 挂断按钮渐变（linear-gradient(145deg, #EF4444, #DC2626)） -->
-    <color name="xz_hangup_start">#FFEF4444</color>
-    <color name="xz_hangup_end">#FFDC2626</color>
+    <!-- 挂断按钮渐变（linear-gradient(145deg, #228FBD, #1A6B8A)） -->
+    <color name="xz_hangup_start">#FF228FBD</color>
+    <color name="xz_hangup_end">#FF1A6B8A</color>
 
     <!-- 连接状态灯：设计稿四态（index.js STATE_MAP） -->
-    <color name="xz_status_connected">#FF34D399</color>
-    <color name="xz_status_connecting">#FFFBBF24</color>
-    <color name="xz_status_disconnected">#FF64748B</color>
-    <color name="xz_status_error">#FFF87171</color>
+    <color name="xz_status_connected">#FF2D5016</color>
+    <color name="xz_status_connecting">#FFB8860B</color>
+    <color name="xz_status_disconnected">#FF8B7355</color>
+    <color name="xz_status_error">#FFDC2626</color>
 
-    <!-- 二进制星河（call.js 的常量色，集中在此便于调色） -->
-    <color name="xz_star_bg_top">#F5050A18</color>
-    <color name="xz_star_bg_mid">#F0080E20</color>
-    <color name="xz_star_bg_bottom">#F5040814</color>
-    <color name="xz_star_edge">#5A50B4E6</color>
-    <color name="xz_star_digit_head">#FF8CF0FF</color>
-    <color name="xz_star_digit_near">#FF46C8EB</color>
-    <color name="xz_star_digit_tail">#FF328CB4</color>
-    <color name="xz_star_ripple">#FF5ADCFA</color>
+    <!-- 水波涟漪动画（call.js 的常量色，集中在此便于调色） -->
+    <color name="xz_water_bg_top">#F5FAF6ED</color>
+    <color name="xz_water_bg_mid">#F0F0E9D8</color>
+    <color name="xz_water_bg_bottom">#EBE8DCC8</color>
+    <color name="xz_water_edge">#408B4513</color>
+    <color name="xz_water_ripple">#FF40A4A0</color>
     <color name="xz_ball_ai">#FF38BDF8</color>
-    <color name="xz_ball_user">#FF4ADE80</color>
+    <color name="xz_ball_user">#FF34D399</color>
 
     <!-- 头像调色板：AvatarPalette 的 8 组渐变（add-bot-modal.js AVATAR_COLORS） -->
     <color name="xz_avatar_0_start">#FF2563EB</color>

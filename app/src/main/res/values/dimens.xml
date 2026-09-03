@@ -40,4 +40,35 @@
 
     <!-- 星河画布高度（#pool-canvas { height: 170px }） -->
     <dimen name="xz_starfield_height">170dp</dimen>
+
+    <!--
+      通话页尺寸：默认值为小屏（smallestScreenWidthDp < 360dp）收缩档，
+      正常屏幕由 values-sw360dp/dimens.xml 覆盖为设计稿原始尺寸。
+    -->
+    <dimen name="call_top_pad_t">4dp</dimen>
+    <dimen name="call_top_pad_b">2dp</dimen>
+    <dimen name="call_toggle_w">84dp</dimen>
+    <dimen name="call_toggle_h">22dp</dimen>
+    <dimen name="call_toggle_label_ts">9sp</dimen>
+    <dimen name="call_toggle_label_margin">8dp</dimen>
+    <dimen name="call_thumb_w">38dp</dimen>
+    <dimen name="call_thumb_h">17dp</dimen>
+    <dimen name="call_thumb_margin">2dp</dimen>
+    <dimen name="call_state_pad_t">6dp</dimen>
+    <dimen name="call_state_pad_b">4dp</dimen>
+    <dimen name="call_timer_ts">10sp</dimen>
+    <dimen name="call_state_ts">13sp</dimen>
+    <dimen name="call_state_margin_t">2dp</dimen>
+    <dimen name="call_side_pad">6dp</dimen>
+    <dimen name="call_pool_pad">4dp</dimen>
+    <dimen name="call_bar_pad_v">6dp</dimen>
+    <dimen name="call_ctrl_btn">30dp</dimen>
+    <dimen name="call_ctrl_icon">13dp</dimen>
+    <dimen name="call_hangup_btn">40dp</dimen>
+    <dimen name="call_hangup_icon">17dp</dimen>
+    <dimen name="call_ctrl_gap">14dp</dimen>
+    <dimen name="call_ctrl_label_ts">8sp</dimen>
+    <dimen name="call_ctrl_label_margin_t">2dp</dimen>
+    <dimen name="call_gain_pop_margin_x">12dp</dimen>
+    <dimen name="call_gain_pop_margin_b">52dp</dimen>
 </resources>

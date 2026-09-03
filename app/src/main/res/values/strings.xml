@@ -145,6 +145,10 @@
     <string name="call_gain_ai_label">机器人音量</string>
     <string name="call_gain_user_label">上行音量</string>
     <string name="call_gain_value">%1$d%%</string>
+    <string name="call_view_text">文字</string>
+    <string name="call_view_anim">动画</string>
+    <string name="call_countdown_title">%1$d 秒后自动进入纯动画界面</string>
+    <string name="call_countdown_hint">想要退回包含完整的界面连续点击动画区域2次才能退回，连续点击3次直接退出语音通话功能页面回到app主页（包含底部3个导航栏那个）</string>
 
     <!-- ============ 通用 ============ -->
     <string name="action_cancel">取消</string>

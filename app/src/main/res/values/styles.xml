@@ -94,7 +94,7 @@
 
     <!-- .call-timer { font-size: 13px; font-mono; letter-spacing: 2px } -->
     <style name="Xz.Text.MonoTimer" parent="">
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">@dimen/call_timer_ts</item>
         <item name="android:textColor">@color/xz_text_hint</item>
         <item name="android:fontFamily">monospace</item>
         <item name="android:letterSpacing">0.15</item>
@@ -139,7 +139,7 @@
 
     <!-- .ctrl-btn { font-size: 11px; letter-spacing: 1px } -->
     <style name="Xz.Text.CtrlLabel" parent="">
-        <item name="android:textSize">11sp</item>
+        <item name="android:textSize">@dimen/call_ctrl_label_ts</item>
         <item name="android:textColor">@color/xz_text_secondary</item>
         <item name="android:letterSpacing">0.09</item>
     </style>
