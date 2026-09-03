@@ -213,6 +213,8 @@ class XiaoZhiController(
 
     init {
         activeBotId = repository.defaultBot()?.id
+        // 同步到 repository，保持两者一致
+        activeBotId?.let { repository.activeBotId = it }
         // 播放队列播空 → 回到 IDLE
         player.onQueueEmpty = {
             mainHandler.post {

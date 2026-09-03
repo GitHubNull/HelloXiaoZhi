@@ -155,9 +155,9 @@ class BotRepository(
             persist()
         }
 
-    /** 启动时应打开的机器人：当前机器人 → 唤醒目标 → 第一个 */
+    /** 启动时应打开的机器人：唤醒目标 → 当前机器人 → 第一个 */
     fun defaultBot(): Bot? =
-        bot(data.activeBotId) ?: bot(data.wakeTargetBotId) ?: data.bots.firstOrNull()
+        bot(data.wakeTargetBotId) ?: bot(data.activeBotId) ?: data.bots.firstOrNull()
 
     // ---------------- 生命周期 ----------------
 

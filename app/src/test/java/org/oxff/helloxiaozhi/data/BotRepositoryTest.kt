@@ -244,6 +244,16 @@ class BotRepositoryTest {
         assertEquals(BotRepositoryFactory.DEFAULT_BOT_ID, repo.activeBotId)
     }
 
+    @Test
+    fun `defaultBot 优先返回唤醒目标而非当前机器人`() {
+        val repo = newRepo()
+        repo.addBot(bot("bot_b", "小学", "11:22:33:44:55:66"))
+        repo.wakeTargetBotId = "bot_b"
+        repo.activeBotId = BotRepositoryFactory.DEFAULT_BOT_ID
+
+        assertEquals("bot_b", repo.defaultBot()?.id)
+    }
+
     // ---------------- 持久化 ----------------
 
     @Test

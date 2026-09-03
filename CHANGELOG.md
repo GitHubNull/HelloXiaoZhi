@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.1] - 2026-09-03
+
+### Fixed
+
+- 修复启动时打开的机器人不符合预期：`BotRepository.defaultBot()` 优先级由「当前机器人 → 唤醒目标 → 第一个」改为「唤醒目标 → 当前机器人 → 第一个」，确保设置了唤醒目标时优先打开唤醒目标
+- `XiaoZhiController` 初始化时将 `activeBotId` 同步到 `repository.activeBotId`，保持启动选择与实际打开一致
+
 ## [0.9.0] - 2026-09-03
 
 ### Added
