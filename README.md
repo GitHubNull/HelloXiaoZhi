@@ -38,6 +38,7 @@ HelloXiaoZhi
 │   └── src/test/                           # JVM 单元测试
 │   └── src/androidTest/                    # 仪器化测试（录音/Opus 编解码探针）
 ├── screenshots/                            # 运行截图
+├── doc/                                    # Visbot 机器人功能调用开发指导文档
 ├── gradle/                                 # Gradle wrapper 与版本目录（libs.versions.toml）
 ├── AGENTS.md                               # AI 代理上下文文档
 ├── DISCLAIMER.md                           # 免责声明
@@ -163,6 +164,10 @@ HelloXiaoZhi
 **Q5：支持哪些 Android 版本？**
 
 minSdk 21（Android 5.0）起，兼容armeabi-v7a / arm64-v8a / x86 / x86_64 四种 ABI。libopus 通过 NDK 本地编译，不依赖在线下载。
+
+## 延伸资料：Visbot 机器人功能调用开发指导
+
+逆向分析优必选 Visbot（小方头）机器人后整理的控制开发文档集：教你**自己开发应用**，通过设备内置 Master 系统服务调用机器人的**全部物理实体能力**——扭头、走路、挥手、表情、灯光、传感器、回充等（含系统签名方案、官方 rosa.jar 反编译 API、不依赖 SDK 的裸 Binder IPC 协议、真机验证参数与完整示例应用）。详见 [doc/Visbot功能调用开发指导文档/README.md](doc/Visbot功能调用开发指导文档/README.md)。
 
 ## 许可证与声明
 

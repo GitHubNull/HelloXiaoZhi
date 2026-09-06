@@ -150,3 +150,15 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 - 改动音频参数（采样率/帧长）：`AudioParams`（hello）、`OpusCodec.FRAME_SIZE`、`AudioRecorderManager` 成帧逻辑需同步
 - 改动上行增强参数（目标电平/增益上下限/噪声门阈值）：必须更新 `MicEnhancerTest` 对应用例；调参前注意「底噪跟踪只吃低于底噪×4 的帧」「电平用原始帧与增强器解耦」两条不变式
 - 真机排障：Logcat 过滤 `XiaoZhiController`（连接/消息）、`AudioRecorder`（电平帧）、`XiaoZhiWebSocket`（WS 生命周期）、`[SM]` 前缀（状态迁移）
+
+## 9. 延伸资料：Visbot 机器人功能调用开发指导文档
+
+入口：[doc/Visbot功能调用开发指导文档/README.md](doc/Visbot功能调用开发指导文档/README.md)（`人类指导文档/` 面向开发者上手，`AI指导规范文档/` 为 API 权威参考）。
+
+该文档集是优必选 Visbot 机器人（`com.ubtrobot.systemservice` Master 服务）的**物理实体功能调用**逆向成果，与本项目（小智语音协议）无代码耦合，属独立研究资料：
+
+- 依据：官方 `rosa.jar` 反编译（`tmp/rosa_decompiled/`，10 个 Controller：servo/locomotion/motion/emotion/light/sensor/power/recharging/part/upgrade）+ 真机验证（`tmp/ubt_repo/` 现成可跑工程与系统签名 `keystore/platform.jks`）
+- 调用链：`Robot.initialize(ctx)` → `Robot.globalContext().getSystemService(name)` → Promise 异步调用 → Binder → Master 服务 → 硬件
+- 裸 IPC 协议：ContentProvider `com.ubtrobot.provider.master` 的 `connect` 方法换取 Binder，`transact(0x57524954 /*WRIT*/)` 发 `ParcelMessage(ParcelRequest)`（详见 AI 文档 08）
+- 前置条件：系统签名 APK + `android:sharedUserId="android.uid.system"` + `com.ubtrobot.permission.ROBOT` 权限
+- 改动机器人控制文档时：同步核对 `tmp/rosa_decompiled/` 反编译源码与 `tmp/ubt_repo/` 真机验证记录，避免编造 API 签名
