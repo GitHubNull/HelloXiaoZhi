@@ -94,6 +94,22 @@
     <string name="settings_group_wake">语音唤醒</string>
     <string name="settings_wake_label">唤醒目标</string>
     <string name="settings_wake_hint">选择语音指令默认唤醒的 AI 机器人。当前版本仅用于决定启动时的默认机器人，尚未接入唤醒词检测。</string>
+    <string name="settings_wake_word_enable">启用唤醒词检测</string>
+    <string name="settings_wake_word_enable_hint">完全本地离线监听「阿妹阿妹」唤醒词（无需注册/联网），检测到后自动进入语音通话</string>
+    <string name="settings_wake_sensitivity">唤醒灵敏度</string>
+    <string name="settings_wake_sensitivity_hint">值越高越容易触发，但误报率也越高（0.0 ~ 1.0）</string>
+    <string name="settings_wake_status_running">运行中</string>
+    <string name="settings_wake_status_stopped">已停止</string>
+    <string name="settings_wake_status_no_permission">需要录音权限</string>
+    <string name="settings_group_assistant">系统语音助手</string>
+    <string name="settings_assistant_status_set">已设为默认语音助手</string>
+    <string name="settings_assistant_status_not_set">未设为默认语音助手</string>
+    <string name="settings_assistant_hint">设为默认语音助手后，可通过长按 Home 键或手势唤醒小智</string>
+    <string name="settings_assistant_go_set">去设置</string>
+    <string name="settings_assistant_check">检查状态</string>
+    <string name="toast_wake_word_enabled">唤醒词检测已开启</string>
+    <string name="toast_wake_word_disabled">唤醒词检测已关闭</string>
+    <string name="toast_assistant_not_set">尚未设为默认语音助手，请前往系统设置</string>
     <string name="settings_group_device">设备信息</string>
     <string name="settings_device_id">设备 ID</string>
     <string name="settings_device_id_hint">本机物理 MAC，作为默认机器人的身份与新建机器人的初始值</string>
@@ -158,6 +174,12 @@
     <string name="time_yesterday">昨天</string>
     <string name="permission_record_audio_required">需要录音权限才能进行语音通话</string>
     <string name="error_connect_failed">连接失败：%1$s</string>
+
+    <string name="wake_notification_channel_name">语音唤醒检测</string>
+    <string name="wake_notification_channel_desc">常驻后台监听唤醒词</string>
+    <string name="wake_notification_title">小智语音唤醒</string>
+    <string name="wake_notification_text">正在本地监听「阿妹阿妹」唤醒词</string>
+    <string name="wake_notification_stop">停止</string>
 
     <!--
       过渡文案：仅被旧版 SettingsActivity / ActivationDialog 及其布局引用，

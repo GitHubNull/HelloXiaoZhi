@@ -28,6 +28,8 @@ class AppConfig(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_CLIENT_ID = "client_id"
         private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
+        private const val KEY_WAKE_WORD_SENSITIVITY = "wake_word_sensitivity"
     }
 
     /** WebSocket 服务器地址（官方或自建代理） */
@@ -73,6 +75,16 @@ class AppConfig(context: Context) {
     /** 是否为官方服务器直连模式（决定是否执行 OTA 注册与验证码激活流程） */
     fun isOfficialMode(): Boolean =
         wsUrl.trimEnd('/') == DEFAULT_WS_URL.trimEnd('/')
+
+    /** 是否启用常驻唤醒词检测 */
+    var wakeWordEnabled: Boolean
+        get() = sp.getBoolean(KEY_WAKE_WORD_ENABLED, false)
+        set(value) = sp.edit().putBoolean(KEY_WAKE_WORD_ENABLED, value).apply()
+
+    /** 唤醒词检测灵敏度（0.0 ~ 1.0，默认 0.5） */
+    var wakeWordSensitivity: Float
+        get() = sp.getFloat(KEY_WAKE_WORD_SENSITIVITY, 0.5f)
+        set(value) = sp.edit().putFloat(KEY_WAKE_WORD_SENSITIVITY, value).apply()
 
     /**
      * 清空全部配置，回到默认值（设置页「重置应用数据」）。

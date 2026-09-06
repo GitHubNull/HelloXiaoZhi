@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.10.0] - 2026-09-06
+
+### Added
+
+- 新增完全离线的常驻唤醒词检测：内置 sherpa-onnx KWS 模型（`sherpa-onnx-kws-zipformer-wenetspeech-3.3M`，随 APK 打包），本地监听「阿妹阿妹」唤醒词，无需注册与联网，检测到后自动进入语音通话
+  - 新增 `wake/` 包：`WakeWordService` 前台服务（microphone 类型、常驻通知、PARTIAL_WAKE_LOCK 防 CPU 休眠）与 `SherpaOnnxWakeWordEngine`（sherpa-onnx `KeywordSpotter` 的离线封装）
+  - `XiaoZhiApp` 启动时按配置自动拉起检测服务；录音权限被回收时 `MainActivity` 检测到后自动关闭服务
+  - 通话页支持唤醒场景：通过 `EXTRA_BOT_ID` / `EXTRA_AUTO_START_CALL` 指定唤醒目标机器人并自动开始通话，通话期间自动暂停检测避免麦克风冲突，挂断后恢复
+- 新增系统语音助手集成（`assistant/` 包）：注册 `VoiceInteractionService` / `VoiceInteractionSessionService` / `RecognitionService`，可在系统设置中设为默认语音助手，通过长按 Home 键或系统手势唤醒小智
+- 设置页新增「语音唤醒」开关与灵敏度滑块（0% ~ 100%），实时显示检测运行状态；新增「系统语音助手」默认状态检查与跳转系统设置入口
+- 集成 sherpa-onnx 1.13.7（JitPack 分发，排除 JVM jar 避免与 Android AAR 内 Kotlin 类冲突）与 Robolectric 测试框架，新增 `SherpaOnnxWakeWordEngineTest` 单元测试
+
 ## [0.9.2] - 2026-09-06
 
 ### Fixed

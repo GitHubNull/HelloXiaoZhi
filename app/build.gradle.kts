@@ -58,7 +58,13 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)
+    // sherpa-onnx 的 JitPack AAR 会传递引入 JVM 实现 jar（sherpa-onnx-jvm），
+    // 与 Android AAR 内的 Kotlin 类重复冲突，需排除仅保留 AAR（含 native .so）
+    implementation(libs.sherpa.onnx) {
+        exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
+    }
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
     // ASR 测试评估体系：模拟小智 WebSocket 服务器（仅测试依赖）
     testImplementation(libs.mockwebserver)
     testImplementation(libs.gson)

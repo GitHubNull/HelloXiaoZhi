@@ -26,6 +26,7 @@ import org.oxff.helloxiaozhi.ui.view.ModalHost
 import org.oxff.helloxiaozhi.ui.view.SlideInContainer
 import org.oxff.helloxiaozhi.ui.view.ToastHost
 import org.oxff.helloxiaozhi.util.OrientationPolicy
+import org.oxff.helloxiaozhi.wake.WakeWordService
 
 /**
  * 三 Tab 外壳（对应设计稿 index.html）：
@@ -81,6 +82,14 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         controller.ensureConnected()
         renderAll()
+        // 若唤醒词检测已开启但权限被回收，自动停止服务
+        if (controller.config.wakeWordEnabled &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            controller.config.wakeWordEnabled = false
+            WakeWordService.stop(this)
+        }
     }
 
     override fun onPause() {

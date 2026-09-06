@@ -1,5 +1,6 @@
 package org.oxff.helloxiaozhi.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
@@ -20,6 +21,7 @@ import org.oxff.helloxiaozhi.data.StoredMessage
 import org.oxff.helloxiaozhi.ui.view.RippleCallView
 import org.oxff.helloxiaozhi.ui.view.ToastHost
 import org.oxff.helloxiaozhi.util.TimeFormat
+import org.oxff.helloxiaozhi.wake.WakeWordService
 
 /**
  * 语音通话页（对应设计稿 call.html）：
@@ -49,6 +51,7 @@ class VoiceCallActivity : AppCompatActivity() {
     private var callSeconds = 0
     private var callStarted = false
     private var isAnimMode = true // true=动画模式，false=文字模式
+    private var autoStartCall = false // 是否自动开始通话（唤醒场景）
 
     // ---------------- 小屏专属优化状态 ----------------
     /** 小屏判定：本机 308x240@120dpi = 410x320dp，sw=320dp；普通手机 sw>=360dp 不受影响 */
@@ -87,15 +90,42 @@ class VoiceCallActivity : AppCompatActivity() {
         setContentView(R.layout.activity_voice_call)
         controller = (application as XiaoZhiApp).controller
 
+        // 处理 Intent extra：唤醒场景自动开始通话
+        intent?.let {
+            autoStartCall = it.getBooleanExtra(EXTRA_AUTO_START_CALL, false)
+            val targetBotId = it.getStringExtra(EXTRA_BOT_ID)
+            if (!targetBotId.isNullOrBlank() && controller.activeBotId != targetBotId) {
+                controller.switchActiveBot(targetBotId)
+            }
+        }
+
         bindViews()
         bindController()
         startCall()
         if (isSmallScreen) setupSmallScreenMode()
+
+        // 通话期间暂停唤醒词检测，避免麦克风冲突
+        WakeWordService.pause(this)
     }
 
     override fun onResume() {
         super.onResume()
         rippleView.start()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // 从唤醒服务/助手再次启动时，若已在通话中则复用当前界面
+        setIntent(intent)
+        intent.let {
+            val targetBotId = it.getStringExtra(EXTRA_BOT_ID)
+            if (!targetBotId.isNullOrBlank() && controller.activeBotId != targetBotId) {
+                controller.switchActiveBot(targetBotId)
+            }
+            if (it.getBooleanExtra(EXTRA_AUTO_START_CALL, false) && !callStarted) {
+                autoStartCall = true
+            }
+        }
     }
 
     override fun onPause() {
@@ -284,6 +314,10 @@ class VoiceCallActivity : AppCompatActivity() {
             toastHost.show(getString(R.string.call_connected), ToastHost.Kind.SUCCESS, 1500)
             updateCallState(controller.chatState)
             mainHandler.postDelayed(timerRunnable, 1000)
+            // 唤醒场景：自动开始语音通话（无需用户点击）
+            if (autoStartCall) {
+                controller.startVoiceCall()
+            }
         }, 1200)
     }
 
@@ -314,6 +348,8 @@ class VoiceCallActivity : AppCompatActivity() {
     private fun hangUp() {
         controller.stopVoiceCall()
         toastHost.show(getString(R.string.call_finished), ToastHost.Kind.NORMAL, 1200)
+        // 挂断后恢复唤醒词检测
+        WakeWordService.resume(this)
         mainHandler.postDelayed({ finish() }, 900)
     }
 
@@ -397,7 +433,7 @@ class VoiceCallActivity : AppCompatActivity() {
         }
     }
 
-    private companion object {
+    companion object {
         const val SMALL_SCREEN_SW_DP = 360
         const val MAX_FULL_UI_ENTRIES = 3
         const val COLLAPSE_DELAY_MS = 8000L
@@ -407,6 +443,12 @@ class VoiceCallActivity : AppCompatActivity() {
         const val PREFS_NAME = "call_ui_prefs"
         const val KEY_FULL_UI_ENTRIES = "full_ui_entries"
         const val TAG = "VoiceCall"
+
+        /** Intent extra：目标机器人 ID（唤醒场景指定） */
+        const val EXTRA_BOT_ID = "extra_bot_id"
+
+        /** Intent extra：是否自动开始通话（唤醒场景为 true） */
+        const val EXTRA_AUTO_START_CALL = "extra_auto_start_call"
     }
 }
 

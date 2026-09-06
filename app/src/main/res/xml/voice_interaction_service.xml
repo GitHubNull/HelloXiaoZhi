@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="org.oxff.helloxiaozhi.assistant.XiaoZhiVoiceInteractionSessionService"
+    android:recognitionService="org.oxff.helloxiaozhi.assistant.XiaoZhiRecognitionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:supportsLocalInteraction="true" />

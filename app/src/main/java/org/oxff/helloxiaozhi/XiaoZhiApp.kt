@@ -1,12 +1,15 @@
 package org.oxff.helloxiaozhi
 
 import android.app.Application
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import org.oxff.helloxiaozhi.config.AppConfig
 import org.oxff.helloxiaozhi.controller.XiaoZhiController
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.data.BotRepositoryFactory
 import org.oxff.helloxiaozhi.util.DeviceInfoProvider
+import org.oxff.helloxiaozhi.wake.WakeWordService
 
 /**
  * 应用入口：持有全局唯一的配置、数据仓库与 XiaoZhiController，
@@ -36,5 +39,16 @@ class XiaoZhiApp : Application() {
         }
         repository = BotRepositoryFactory.create(this, gson, config.deviceId)
         controller = XiaoZhiController(this, config, gson, repository)
+
+        // 若唤醒词检测已开启且权限就绪，自动启动常驻检测服务
+        if (config.wakeWordEnabled) {
+            val hasAudioPermission = ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasAudioPermission) {
+                WakeWordService.start(this)
+            }
+        }
     }
 }
