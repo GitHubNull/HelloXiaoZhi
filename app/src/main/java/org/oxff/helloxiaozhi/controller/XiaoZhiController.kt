@@ -95,6 +95,15 @@ class XiaoZhiController(
     @Volatile
     private var isAiPlaying = false
 
+    /**
+     * 通话会话是否存活（挂断即静音闸门）。
+     * true 仅在语音通话期间；stopVoiceCall 后置 false，
+     * 迟到的 TTS 音频帧/tts start/挂起的 resume 全部被拦截，绝不再出声。
+     * 文本消息（stt/llm/tts sentence_start）不走此闸门，正常落库（微信式即时聊天）。
+     */
+    @Volatile
+    private var inVoiceCall = false
+
     private val stateMachine = ChatStateMachine(
         HandlerExecutor(mainHandler),
         HandlerSilenceScheduler(mainHandler),
@@ -115,7 +124,8 @@ class XiaoZhiController(
                     ChatEvent.USER_START_SPEAKING -> player.pausePlayback()
                     // AI 开始说话：延迟恢复播放（避免服务器端 VAD 把 TTS 开头误判为用户语音）
                     ChatEvent.AI_START_SPEAKING -> mainHandler.postDelayed({
-                        player.resumePlayback()
+                        // 挂断后挂起的 resume 不再恢复播放（真实电话逻辑：挂断即静音）
+                        if (inVoiceCall) player.resumePlayback()
                     }, TTS_PLAY_DELAY_MS)
                     // AI 本轮播放结束（队列已播空）：官方服务器在 tts stop 后不会自动继续监听，
                     // 通话中必须重发 listen start 开启新一轮监听（真机实测：不重发则只有第一轮被识别，
@@ -341,6 +351,7 @@ class XiaoZhiController(
     /** 进入语音通话（对应 App.vue showVoiceCallPanel） */
     fun startVoiceCall() {
         Log.i(TAG, "startVoiceCall: state=${stateMachine.state}, sessionId=$sessionId")
+        inVoiceCall = true
         ws.sendText(AbortMessage(sessionId = sessionId))
         player.pausePlayback()
         if (stateMachine.state != ChatState.IDLE) {
@@ -368,6 +379,9 @@ class XiaoZhiController(
 
     /** 退出语音通话（对应 App.vue closeVoiceCallPanel） */
     fun stopVoiceCall() {
+        // 挂断即静音：先落闸门，后续迟到的 TTS 音频帧/tts start/挂起的 resume 全部被拦截
+        inVoiceCall = false
+        isAiPlaying = false
         ws.sendText(AbortMessage(sessionId = sessionId))
         // 结束监听（与 startVoiceCall 的 listen start 配对）
         ws.sendText(ListenMessage.stop(sessionId))
@@ -472,6 +486,11 @@ class XiaoZhiController(
         when (tts.state) {
             TtsMessage.STATE_START -> {
                 mainHandler.post {
+                    // 挂断后迟到的 tts start 丢弃：不置 isAiPlaying、不动状态机（真实电话逻辑）
+                    if (!inVoiceCall) {
+                        Log.i(TAG, "[WS] tts start dropped (not in voice call)")
+                        return@post
+                    }
                     isAiPlaying = true
                     if (stateMachine.state == ChatState.IDLE || stateMachine.state == ChatState.USER_SPEAKING) {
                         stateMachine.setState(ChatState.AI_SPEAKING)
@@ -509,6 +528,11 @@ class XiaoZhiController(
         // 计算 AI 播放音频的电平（RMS），用于驱动通话页水波动画
         val aiLevel = AudioMath.rmsLevel(pcm)
         mainHandler.postDelayed({
+            // 挂断后迟到的音频帧丢弃：不入队、不动状态机（真实电话逻辑：挂断即静音）
+            if (!inVoiceCall) {
+                Log.i(TAG, "[WS] audio frame dropped (not in voice call)")
+                return@postDelayed
+            }
             player.enqueue(pcm)
             onAiWaveLevel?.invoke(aiLevel)
             if (stateMachine.state == ChatState.IDLE) {

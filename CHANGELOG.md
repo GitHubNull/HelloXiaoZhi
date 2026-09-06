@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.2] - 2026-09-06
+
+### Fixed
+
+- 修复挂断后仍可能出声：新增 `inVoiceCall` 静音闸门，`stopVoiceCall` 时置 false，后续迟到的 TTS 音频帧、`tts start`、挂起的 `resumePlayback` 全部被拦截，实现「挂断即静音」的真实电话逻辑
+
 ## [0.9.1] - 2026-09-03
 
 ### Fixed
