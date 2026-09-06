@@ -135,6 +135,10 @@ class VoiceCallActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // 无论通话界面以何种方式销毁（挂断/返回/系统回收/最近任务划掉），
+        // 都必须恢复唤醒词检测：否则非 hangUp 路径退出时，WakeWordService
+        // 会永远停在 pause 状态（麦克风被释放），此后用户再也无法唤醒。
+        WakeWordService.resume(this)
         unbindController()
         mainHandler.removeCallbacks(timerRunnable)
         mainHandler.removeCallbacks(expandRunnable)

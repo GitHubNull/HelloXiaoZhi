@@ -30,6 +30,8 @@ class AppConfig(context: Context) {
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         private const val KEY_WAKE_WORD_SENSITIVITY = "wake_word_sensitivity"
+        private const val KEY_WAKE_SOUND_ENABLED = "wake_sound_enabled"
+        private const val KEY_AI_DONE_SOUND_ENABLED = "ai_done_sound_enabled"
     }
 
     /** WebSocket 服务器地址（官方或自建代理） */
@@ -85,6 +87,16 @@ class AppConfig(context: Context) {
     var wakeWordSensitivity: Float
         get() = sp.getFloat(KEY_WAKE_WORD_SENSITIVITY, 0.5f)
         set(value) = sp.edit().putFloat(KEY_WAKE_WORD_SENSITIVITY, value).apply()
+
+    /** 唤醒成功时是否播放提示音（默认开启） */
+    var wakeSoundEnabled: Boolean
+        get() = sp.getBoolean(KEY_WAKE_SOUND_ENABLED, true)
+        set(value) = sp.edit().putBoolean(KEY_WAKE_SOUND_ENABLED, value).apply()
+
+    /** AI 回答结束时是否播放提示音（默认开启） */
+    var aiDoneSoundEnabled: Boolean
+        get() = sp.getBoolean(KEY_AI_DONE_SOUND_ENABLED, true)
+        set(value) = sp.edit().putBoolean(KEY_AI_DONE_SOUND_ENABLED, value).apply()
 
     /**
      * 清空全部配置，回到默认值（设置页「重置应用数据」）。

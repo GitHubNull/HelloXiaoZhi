@@ -298,7 +298,7 @@ class AudioPlayer {
     private companion object {
         const val TAG = "AudioPlayer"
         const val DEFAULT_SAMPLE_RATE = 16000
-        const val EMPTY_TIMEOUT_MS = 8000L
+        const val EMPTY_TIMEOUT_MS = 1500L
         const val POLL_WAIT_MS = 40L
     }
 }

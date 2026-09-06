@@ -23,6 +23,7 @@ import org.oxff.helloxiaozhi.XiaoZhiApp
 import org.oxff.helloxiaozhi.ui.MainActivity
 import org.oxff.helloxiaozhi.ui.VoiceCallActivity
 import org.oxff.helloxiaozhi.util.AudioMath
+import org.oxff.helloxiaozhi.util.TonePlayer
 
 /**
  * 常驻唤醒词检测前台服务。
@@ -261,6 +262,11 @@ class WakeWordService : Service() {
         Log.i(TAG, "检测到唤醒词")
         val repository = app.repository
         val controller = app.controller
+
+        // 唤醒成功提示音：作为视觉反馈的补充，确保用户在不看屏幕的情况下也能明确知道设备已唤醒
+        if (app.config.wakeSoundEnabled) {
+            TonePlayer.playWakeUpTone()
+        }
 
         // 获取唤醒目标机器人
         val targetBot = repository.defaultBot() ?: run {

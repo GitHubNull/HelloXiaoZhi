@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.11.0] - 2026-09-06
+
+### Added
+
+- 新增提示音反馈系统 `TonePlayer`（SoundPool 预加载，低延迟、不占额外线程）：唤醒成功播放三连音提示（`wake_success.wav`），AI 回答结束播放单音提示（`ai_done.wav`），音效资源置于 `res/raw/`
+- 设置页新增「唤醒提示音」「AI 结束提示音」两个开关（默认开启，`AppConfig` 持久化），`XiaoZhiApp` 启动时预加载音效
+
+### Fixed
+
+- 修复通话页非挂断路径退出（返回键/最近任务划掉/系统回收）后唤醒词检测永久停摆：`VoiceCallActivity.onDestroy` 统一恢复 `WakeWordService`（此前仅 `hangUp` 恢复，其余路径退出后麦克风被释放，用户再也无法唤醒）
+- 消除 AI 结束后的静默死区：收到 `tts stop` 时若播放队列已播空立即回 IDLE（原固定等待 800ms 宽限期，现降为 200ms 仅兜底尾音帧）；`AudioPlayer` 队列播空超时由 8s 收紧至 1.5s，AI 说完后不再有约 1 秒「不能开口」的停顿感
+
 ## [0.10.0] - 2026-09-06
 
 ### Added

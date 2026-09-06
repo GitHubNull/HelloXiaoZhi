@@ -235,6 +235,76 @@
                     android:layout_marginTop="2dp"
                     android:text="50%" />
 
+                <!-- 唤醒提示音 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Xz.Text.LabelStrong"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_wake_sound_enable" />
+
+                        <TextView
+                            style="@style/Xz.Text.Hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_wake_sound_enable_hint" />
+                    </LinearLayout>
+
+                    <org.oxff.helloxiaozhi.ui.view.XzSwitch
+                        android:id="@+id/wake_sound_switch"
+                        android:layout_width="48dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+
+                <!-- AI 结束提示音 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Xz.Text.LabelStrong"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_ai_done_sound_enable" />
+
+                        <TextView
+                            style="@style/Xz.Text.Hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_ai_done_sound_enable_hint" />
+                    </LinearLayout>
+
+                    <org.oxff.helloxiaozhi.ui.view.XzSwitch
+                        android:id="@+id/ai_done_sound_switch"
+                        android:layout_width="48dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+
                 <!-- 唤醒状态 -->
                 <TextView
                     android:id="@+id/wake_status_text"

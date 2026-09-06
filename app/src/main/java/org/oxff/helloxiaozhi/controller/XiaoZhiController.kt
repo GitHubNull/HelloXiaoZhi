@@ -40,6 +40,7 @@ import org.oxff.helloxiaozhi.net.XiaoZhiWebSocket
 import org.oxff.helloxiaozhi.util.AudioMath
 import org.oxff.helloxiaozhi.util.HandlerExecutor
 import org.oxff.helloxiaozhi.util.HandlerSilenceScheduler
+import org.oxff.helloxiaozhi.util.TonePlayer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -132,6 +133,10 @@ class XiaoZhiController(
                     // 后续语音要等挂断时的 listen stop 才被一次性识别）。对齐 ESP32 固件/参考 APP：
                     // 每轮回复结束后重新 StartListening
                     ChatEvent.AI_STOP_SPEAKING -> {
+                        // AI 回答结束提示音：告知用户 AI 已结束发言，可以开始说话
+                        if (config.aiDoneSoundEnabled) {
+                            TonePlayer.playAiDoneTone()
+                        }
                         if (recorder != null && connectionStatus == ConnectionStatus.CONNECTED) {
                             ws.sendText(ListenMessage.start(sessionId))
                         }
@@ -418,6 +423,7 @@ class XiaoZhiController(
         opusEncoder = null
         opusDecoder?.close()
         opusDecoder = null
+        TonePlayer.release()
     }
 
     // ---------------- 消息处理 ----------------
@@ -506,14 +512,26 @@ class XiaoZhiController(
                 }
             }
             TtsMessage.STATE_STOP -> {
-                // 服务器结束本次 TTS：尾音帧可能还在路上，延迟一小段
-                // 若队列已播空则立即回 IDLE，无需等播放器超时
-                mainHandler.postDelayed({
-                    isAiPlaying = false
-                    if (stateMachine.state == ChatState.AI_SPEAKING && player.isQueueEmpty()) {
-                        stateMachine.setState(ChatState.IDLE)
+                // 服务器结束本次 TTS：立即检查队列是否已播空，若已播空则直接回 IDLE，
+                // 无需等宽限期；尾音帧还在路上时才短延迟后再检查。
+                // 优化前：固定等 800ms 宽限期，导致 AI 说完话后存在约 1 秒的死区时间。
+                mainHandler.post {
+                    if (player.isQueueEmpty()) {
+                        // 队列已播空：立即回 IDLE，消除死区
+                        isAiPlaying = false
+                        if (stateMachine.state == ChatState.AI_SPEAKING) {
+                            stateMachine.setState(ChatState.IDLE)
+                        }
+                    } else {
+                        // 尾音帧还在路上：短延迟后再检查
+                        mainHandler.postDelayed({
+                            isAiPlaying = false
+                            if (stateMachine.state == ChatState.AI_SPEAKING && player.isQueueEmpty()) {
+                                stateMachine.setState(ChatState.IDLE)
+                            }
+                        }, TTS_STOP_GRACE_MS)
                     }
-                }, TTS_STOP_GRACE_MS)
+                }
             }
             else -> Unit
         }
@@ -606,8 +624,8 @@ class XiaoZhiController(
         const val TAG = "XiaoZhiController"
         const val DEFAULT_SAMPLE_RATE = 16000
 
-        /** tts stop 后等待尾音帧入队的宽限期 */
-        const val TTS_STOP_GRACE_MS = 800L
+        /** tts stop 后等待尾音帧入队的宽限期（缩短以降低死区时间） */
+        const val TTS_STOP_GRACE_MS = 200L
 
         /** listen stop 后延迟播放 TTS 的时间（避免服务器端 VAD 误判） */
         const val TTS_PLAY_DELAY_MS = 300L

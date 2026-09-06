@@ -9,6 +9,7 @@ import org.oxff.helloxiaozhi.controller.XiaoZhiController
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.data.BotRepositoryFactory
 import org.oxff.helloxiaozhi.util.DeviceInfoProvider
+import org.oxff.helloxiaozhi.util.TonePlayer
 import org.oxff.helloxiaozhi.wake.WakeWordService
 
 /**
@@ -39,6 +40,9 @@ class XiaoZhiApp : Application() {
         }
         repository = BotRepositoryFactory.create(this, gson, config.deviceId)
         controller = XiaoZhiController(this, config, gson, repository)
+
+        // 预加载提示音效（唤醒成功 / AI 结束），供 TonePlayer 低延迟播放
+        TonePlayer.init(this)
 
         // 若唤醒词检测已开启且权限就绪，自动启动常驻检测服务
         if (config.wakeWordEnabled) {

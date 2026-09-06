@@ -49,6 +49,8 @@ class SettingsPageController(
     private val wakeWordSwitch = root.findViewById<XzSwitch>(R.id.wake_word_switch)
     private val wakeSensitivitySlider = root.findViewById<SeekBar>(R.id.wake_sensitivity_slider)
     private val wakeSensitivityValue = root.findViewById<TextView>(R.id.wake_sensitivity_value)
+    private val wakeSoundSwitch = root.findViewById<XzSwitch>(R.id.wake_sound_switch)
+    private val aiDoneSoundSwitch = root.findViewById<XzSwitch>(R.id.ai_done_sound_switch)
     private val wakeStatusText = root.findViewById<TextView>(R.id.wake_status_text)
     private val assistantStatusText = root.findViewById<TextView>(R.id.assistant_status_text)
     private val btnAssistantSettings = root.findViewById<TextView>(R.id.btn_assistant_settings)
@@ -106,6 +108,16 @@ class SettingsPageController(
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
+        // 唤醒提示音开关
+        wakeSoundSwitch.onCheckedChange = { checked ->
+            controller.config.wakeSoundEnabled = checked
+        }
+
+        // AI 结束提示音开关
+        aiDoneSoundSwitch.onCheckedChange = { checked ->
+            controller.config.aiDoneSoundEnabled = checked
+        }
+
         // 系统语音助手
         btnAssistantSettings.setOnClickListener {
             try {
@@ -134,6 +146,8 @@ class SettingsPageController(
         val sensitivityPercent = (controller.config.wakeWordSensitivity * 100).toInt()
         wakeSensitivitySlider.progress = sensitivityPercent
         wakeSensitivityValue.text = "$sensitivityPercent%"
+        wakeSoundSwitch.setChecked(controller.config.wakeSoundEnabled, animate = false)
+        aiDoneSoundSwitch.setChecked(controller.config.aiDoneSoundEnabled, animate = false)
         updateWakeStatus()
         updateAssistantStatus()
     }

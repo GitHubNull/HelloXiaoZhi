@@ -98,6 +98,10 @@
     <string name="settings_wake_word_enable_hint">完全本地离线监听「阿妹阿妹」唤醒词（无需注册/联网），检测到后自动进入语音通话</string>
     <string name="settings_wake_sensitivity">唤醒灵敏度</string>
     <string name="settings_wake_sensitivity_hint">值越高越容易触发，但误报率也越高（0.0 ~ 1.0）</string>
+    <string name="settings_wake_sound_enable">唤醒提示音</string>
+    <string name="settings_wake_sound_enable_hint">唤醒成功时播放提示音，作为视觉反馈的补充</string>
+    <string name="settings_ai_done_sound_enable">AI 结束提示音</string>
+    <string name="settings_ai_done_sound_enable_hint">AI 回答结束时播放提示音，告知用户可以开始说话</string>
     <string name="settings_wake_status_running">运行中</string>
     <string name="settings_wake_status_stopped">已停止</string>
     <string name="settings_wake_status_no_permission">需要录音权限</string>
