@@ -337,6 +337,12 @@ class MainActivity : AppCompatActivity() {
 
     /** 启动录音后进入通话页（对应 App.vue showVoiceCallPanel） */
     private fun enterVoiceCall() {
+        // 先暂停唤醒词检测，避免麦克风冲突
+        WakeWordService.pause(this)
+        // 确保 WebSocket 已连接，未连接时先连接再启动通话
+        if (controller.connectionStatus != org.oxff.helloxiaozhi.chat.ConnectionStatus.CONNECTED) {
+            controller.ensureConnected()
+        }
         controller.startVoiceCall()
         startActivity(Intent(this, VoiceCallActivity::class.java))
     }

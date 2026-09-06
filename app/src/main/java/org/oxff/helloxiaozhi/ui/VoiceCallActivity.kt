@@ -243,6 +243,8 @@ class VoiceCallActivity : AppCompatActivity() {
     /** 挂断：停止采集并退出（对应 App.vue closeVoiceCallPanel） */
     fun hangUp() {
         controller.stopVoiceCall()
+        // 机器人复位：归中头部、停止移动、消除表情
+        controller.robotController.resetToDefault()
         viewBinder.toastHost.show(getString(R.string.call_finished), ToastHost.Kind.NORMAL, 1200)
         // 挂断后恢复唤醒词检测
         WakeWordService.resume(this)

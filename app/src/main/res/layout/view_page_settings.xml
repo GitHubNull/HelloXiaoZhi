@@ -315,6 +315,60 @@
                     android:text="@string/settings_wake_status_stopped" />
             </LinearLayout>
 
+            <!-- 机器人动作 -->
+            <LinearLayout
+                style="@style/Xz.Card"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    style="@style/Xz.Text.GroupTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="14dp"
+                    android:text="@string/settings_group_robot" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/Xz.Text.LabelStrong"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_robot_action_enable" />
+
+                        <TextView
+                            style="@style/Xz.Text.Hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_robot_action_enable_hint" />
+                    </LinearLayout>
+
+                    <org.oxff.helloxiaozhi.ui.view.XzSwitch
+                        android:id="@+id/robot_action_switch"
+                        android:layout_width="48dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/robot_status_text"
+                    style="@style/Xz.Text.Hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="@string/settings_robot_status_unavailable" />
+            </LinearLayout>
+
             <!-- 系统语音助手 -->
             <LinearLayout
                 style="@style/Xz.Card"

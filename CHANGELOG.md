@@ -4,6 +4,22 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.12.0] - 2026-09-06
+
+### Added
+
+- 新增 Visbot 机器人动作与表情控制（仅在优必选 Visbot 设备上生效，普通设备自动禁用）：
+  - 内置 UBT SDK（`app/libs/rosa.jar`）与 `robot/` 包：`VisbotRobotController`（SDK 统一初始化与能力探测）、`VisbotServoController`（点头/摇头/抬头/低头/回中）、`VisbotMotionController`（移动）、`VisbotEmotionController`（表情，调用系统 SVGA 表情资源）
+  - `VisbotActionMapper` 根据 AI 回复文本关键词自动匹配动作（同意/拒绝/打招呼等），由通话状态机驱动说话/静默表情切换，挂断通话时自动复位机器人
+  - 设置页新增「机器人动作」卡片：开关（`AppConfig.robotActionEnabled`）与机器人服务可用状态显示
+  - Manifest 声明系统共享 UID 与机器人控制权限，debug 构建启用平台系统签名（`platform.jks`，不入库）
+
+### Fixed
+
+- 修复进入通话瞬间用户前半句被漏识别：`AudioPipeline` 新增 1.5s 上行就绪窗口，listen start 到达服务器并激活服务器端 VAD 前丢弃上行帧（电平仍照常驱动声浪 UI）
+- 修复未连接时直接进入通话导致指令丢失：`startVoiceCall` 与通话页入口先确保 WebSocket 已连接（`ensureConnected`）再发送 Abort/Listen
+- 修复唤醒词检测暂停/恢复的麦克风抢占竞态：`WakeWordService.pause/resume` 改为同步直调进程内实例（原 `startService` Intent 异步排队，pause 尚未生效时通话录音可能与唤醒录音抢占麦克风）
+
 ## [0.11.1] - 2026-09-06
 
 ### Changed

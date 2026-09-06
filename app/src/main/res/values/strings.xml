@@ -114,6 +114,11 @@
     <string name="toast_wake_word_enabled">唤醒词检测已开启</string>
     <string name="toast_wake_word_disabled">唤醒词检测已关闭</string>
     <string name="toast_assistant_not_set">尚未设为默认语音助手，请前往系统设置</string>
+    <string name="settings_group_robot">机器人动作</string>
+    <string name="settings_robot_action_enable">启用机器人动作与表情</string>
+    <string name="settings_robot_action_enable_hint">仅在优必选 Visbot 设备上生效，根据对话内容自动执行动作和表情</string>
+    <string name="settings_robot_status_available">已连接机器人服务</string>
+    <string name="settings_robot_status_unavailable">当前设备不支持机器人动作</string>
     <string name="settings_group_device">设备信息</string>
     <string name="settings_device_id">设备 ID</string>
     <string name="settings_device_id_hint">本机物理 MAC，作为默认机器人的身份与新建机器人的初始值</string>

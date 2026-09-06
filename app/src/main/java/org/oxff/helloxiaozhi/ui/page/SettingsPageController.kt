@@ -55,6 +55,8 @@ class SettingsPageController(
     private val assistantStatusText = root.findViewById<TextView>(R.id.assistant_status_text)
     private val btnAssistantSettings = root.findViewById<TextView>(R.id.btn_assistant_settings)
     private val btnAssistantCheck = root.findViewById<TextView>(R.id.btn_assistant_check)
+    private val robotActionSwitch = root.findViewById<XzSwitch>(R.id.robot_action_switch)
+    private val robotStatusText = root.findViewById<TextView>(R.id.robot_status_text)
 
     private val wakeAdapter = WakeTargetAdapter(onSelect = { bot ->
         repository.wakeTargetBotId = bot.id
@@ -118,6 +120,12 @@ class SettingsPageController(
             controller.config.aiDoneSoundEnabled = checked
         }
 
+        // 机器人动作开关
+        robotActionSwitch.onCheckedChange = { checked ->
+            controller.config.robotActionEnabled = checked
+            controller.actionMapper.enabled = checked
+        }
+
         // 系统语音助手
         btnAssistantSettings.setOnClickListener {
             try {
@@ -148,8 +156,10 @@ class SettingsPageController(
         wakeSensitivityValue.text = "$sensitivityPercent%"
         wakeSoundSwitch.setChecked(controller.config.wakeSoundEnabled, animate = false)
         aiDoneSoundSwitch.setChecked(controller.config.aiDoneSoundEnabled, animate = false)
+        robotActionSwitch.setChecked(controller.config.robotActionEnabled, animate = false)
         updateWakeStatus()
         updateAssistantStatus()
+        updateRobotStatus()
     }
 
     private fun renderWakeTargets() {
@@ -215,6 +225,15 @@ class SettingsPageController(
             !checkAudioPermission() -> context.getString(R.string.settings_wake_status_no_permission)
             controller.config.wakeWordEnabled -> context.getString(R.string.settings_wake_status_running)
             else -> context.getString(R.string.settings_wake_status_stopped)
+        }
+    }
+
+    private fun updateRobotStatus() {
+        val context = root.context
+        robotStatusText.text = if (controller.robotController.isAvailable) {
+            context.getString(R.string.settings_robot_status_available)
+        } else {
+            context.getString(R.string.settings_robot_status_unavailable)
         }
     }
 

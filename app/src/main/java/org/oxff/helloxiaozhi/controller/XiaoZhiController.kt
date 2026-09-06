@@ -24,6 +24,8 @@ import org.oxff.helloxiaozhi.config.AppConfig
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.net.OtaClient
 import org.oxff.helloxiaozhi.net.XiaoZhiWebSocket
+import org.oxff.helloxiaozhi.robot.VisbotActionMapper
+import org.oxff.helloxiaozhi.robot.VisbotRobotController
 import org.oxff.helloxiaozhi.util.HandlerExecutor
 import org.oxff.helloxiaozhi.util.HandlerSilenceScheduler
 import org.oxff.helloxiaozhi.util.TonePlayer
@@ -129,6 +131,12 @@ class XiaoZhiController(
     private val audioPipeline: AudioPipeline = AudioPipeline(audioManager, mainHandler, stateMachine)
     private val messageDispatcher: MessageDispatcher = MessageDispatcher(gson, repository, mainHandler, stateMachine)
 
+    // Visbot 机器人控制（仅在 Visbot 设备上激活）
+    val robotController = VisbotRobotController(appContext)
+    val actionMapper = VisbotActionMapper(robotController).apply {
+        enabled = config.robotActionEnabled
+    }
+
     // UI 回调
     var onConnectionStatusChanged: ((ConnectionStatus) -> Unit)? = null
     var onChatMessage: ((botId: String, message: ChatMessage) -> Unit)? = null
@@ -176,6 +184,10 @@ class XiaoZhiController(
         // 消息分发器回调
         messageDispatcher.onChatMessage = { botId, message ->
             onChatMessage?.invoke(botId, message)
+            // AI 消息触发机器人动作映射
+            if (message.role == org.oxff.helloxiaozhi.chat.ChatRole.AI) {
+                actionMapper.processMessage(message.content, isAiSpeaking = audioPipeline.isAiPlaying)
+            }
         }
         messageDispatcher.onHelloReceived = { sessionId, sampleRate ->
             connectionManager.onHelloReceived(sessionId)
@@ -193,6 +205,12 @@ class XiaoZhiController(
         }
         messageDispatcher.onUserStartSpeaking = {
             // 用户开始说话时的额外处理
+        }
+
+        // 状态机状态变更联动机器人表情
+        stateMachine.onStateChanged = { state ->
+            onChatStateChanged?.invoke(state)
+            actionMapper.onChatStateChanged(state)
         }
     }
 
@@ -225,6 +243,10 @@ class XiaoZhiController(
     // ---------------- 语音通话（委托给 AudioPipeline） ----------------
 
     fun startVoiceCall() {
+        // 确保 WebSocket 已连接，未连接时先连接
+        if (connectionManager.connectionStatus != ConnectionStatus.CONNECTED) {
+            connectionManager.ensureConnected()
+        }
         ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
         ws.sendText(ListenMessage.start(connectionManager.sessionId))
         audioPipeline.startVoiceCall(connectionManager.sessionId)

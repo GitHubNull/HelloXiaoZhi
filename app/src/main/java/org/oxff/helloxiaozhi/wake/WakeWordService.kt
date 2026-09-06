@@ -52,6 +52,9 @@ class WakeWordService : Service() {
         Log.i(TAG, "WakeWordService onCreate")
         notificationManager = WakeWordNotificationManager(this)
         notificationManager?.createNotificationChannel()
+        // 登记进程内实例，供通话页同步暂停/恢复（避免 startService Intent 异步
+        // 排队导致 pause 尚未生效、通话录音就与唤醒录音抢占麦克风）
+        instance = this
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -81,6 +84,7 @@ class WakeWordService : Service() {
         Log.i(TAG, "WakeWordService onDestroy")
         stopDetection()
         releaseWakeLock()
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
@@ -233,6 +237,10 @@ class WakeWordService : Service() {
         const val ACTION_PAUSE = "org.oxff.helloxiaozhi.wake.PAUSE"
         const val ACTION_RESUME = "org.oxff.helloxiaozhi.wake.RESUME"
 
+        /** 进程内服务实例（同进程直调，保证 pause/resume 同步生效） */
+        @Volatile
+        private var instance: WakeWordService? = null
+
         /** 启动服务 */
         fun start(context: Context) {
             val intent = Intent(context, WakeWordService::class.java)
@@ -244,16 +252,27 @@ class WakeWordService : Service() {
             context.stopService(Intent(context, WakeWordService::class.java))
         }
 
-        /** 暂停检测（通话期间调用） */
+        /** 暂停检测（通话期间调用）：同步直调服务实例，确保麦克风立即释放 */
         fun pause(context: Context) {
-            val intent = Intent(context, WakeWordService::class.java).setAction(ACTION_PAUSE)
-            context.startService(intent)
+            val svc = instance
+            if (svc != null) {
+                svc.pauseDetection()
+            } else {
+                // 服务未运行（唤醒功能未开启）时无需任何操作；走 Intent 兜底
+                val intent = Intent(context, WakeWordService::class.java).setAction(ACTION_PAUSE)
+                context.startService(intent)
+            }
         }
 
-        /** 恢复检测（通话结束后调用） */
+        /** 恢复检测（通话结束后调用）：同步直调服务实例 */
         fun resume(context: Context) {
-            val intent = Intent(context, WakeWordService::class.java).setAction(ACTION_RESUME)
-            context.startService(intent)
+            val svc = instance
+            if (svc != null) {
+                svc.resumeDetection()
+            } else {
+                val intent = Intent(context, WakeWordService::class.java).setAction(ACTION_RESUME)
+                context.startService(intent)
+            }
         }
     }
 }

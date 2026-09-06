@@ -50,6 +50,17 @@ class AudioPipeline(
     var inVoiceCall = false
         private set
 
+    /**
+     * 上行就绪时间戳（SystemClock.uptimeMillis）：进入通话后给 listen start
+     * 一个到达服务器并激活服务器端 VAD 的缓冲窗口，窗口期内的上行帧会被丢弃。
+     *
+     * 背景：进入通话时录音与 listen start 几乎同时发出，但 listen start 到达
+     * 服务器、服务器 VAD 激活存在网络往返延迟。若用户在接通动画期间就开始说话，
+     * 这段窗口内的前半句音频虽上行了，服务器却还没开始监听，导致只识别到后半句。
+     */
+    @Volatile
+    private var uplinkReadyAtMs = 0L
+
     private var recorder: AudioRecorderManager? = null
     private var opusEncoder: OpusCodec? = null
     private var opusDecoder: OpusCodec? = null
@@ -77,6 +88,9 @@ class AudioPipeline(
     fun startVoiceCall(sessionId: String) {
         Log.i(TAG, "startVoiceCall: state=${stateMachine.state}, sessionId=$sessionId")
         inVoiceCall = true
+        // 上行就绪窗口：给 listen start 留出到达服务器并激活 VAD 的时间，
+        // 避免进入通话瞬间用户说的前半句被服务器漏识别
+        uplinkReadyAtMs = android.os.SystemClock.uptimeMillis() + UPLINK_READY_DELAY_MS
         player.pausePlayback()
         if (stateMachine.state != ChatState.IDLE) {
             stateMachine.setState(ChatState.IDLE)
@@ -85,8 +99,8 @@ class AudioPipeline(
         val encoder = opusEncoder ?: OpusCodec.encoder().also { opusEncoder = it }
         recorder = AudioRecorderManager(
             onFrame = { frame, level ->
-                // AI 播放时完全不上行
-                if (!isAiPlaying) {
+                // AI 播放时完全不上行；上行就绪窗口期内也不上行（但电平仍驱动 UI）
+                if (!isAiPlaying && android.os.SystemClock.uptimeMillis() >= uplinkReadyAtMs) {
                     stateMachine.handleAudioLevel(level, frame)
                 }
             },
@@ -250,5 +264,13 @@ class AudioPipeline(
         const val DEFAULT_SAMPLE_RATE = 16000
         const val TTS_STOP_GRACE_MS = 200L
         const val TTS_PLAY_DELAY_MS = 300L
+
+        /**
+         * 进入通话后的上行就绪延迟（毫秒）：给 listen start 留出到达服务器并激活
+         * 服务器端 VAD 的时间，同时覆盖接通动画期间用户可能开始说话的窗口。
+         * 取值需覆盖：网络往返（200~400ms）+ 服务器处理（200ms）+ 用户可能在
+         * 接通动画期间就开始说话的提前量（约 1s）。
+         */
+        const val UPLINK_READY_DELAY_MS = 1500L
     }
 }

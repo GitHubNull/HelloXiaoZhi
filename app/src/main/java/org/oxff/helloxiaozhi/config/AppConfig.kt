@@ -32,6 +32,7 @@ class AppConfig(context: Context) {
         private const val KEY_WAKE_WORD_SENSITIVITY = "wake_word_sensitivity"
         private const val KEY_WAKE_SOUND_ENABLED = "wake_sound_enabled"
         private const val KEY_AI_DONE_SOUND_ENABLED = "ai_done_sound_enabled"
+        private const val KEY_ROBOT_ACTION_ENABLED = "robot_action_enabled"
     }
 
     /** WebSocket 服务器地址（官方或自建代理） */
@@ -97,6 +98,11 @@ class AppConfig(context: Context) {
     var aiDoneSoundEnabled: Boolean
         get() = sp.getBoolean(KEY_AI_DONE_SOUND_ENABLED, true)
         set(value) = sp.edit().putBoolean(KEY_AI_DONE_SOUND_ENABLED, value).apply()
+
+    /** 是否启用机器人动作与表情（默认开启，仅在 Visbot 设备上生效） */
+    var robotActionEnabled: Boolean
+        get() = sp.getBoolean(KEY_ROBOT_ACTION_ENABLED, true)
+        set(value) = sp.edit().putBoolean(KEY_ROBOT_ACTION_ENABLED, value).apply()
 
     /**
      * 清空全部配置，回到默认值（设置页「重置应用数据」）。

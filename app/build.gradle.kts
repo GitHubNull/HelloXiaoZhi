@@ -20,7 +20,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("platform") {
+            storeFile = file("../platform.jks")
+            storePassword = "android"
+            keyAlias = "platform"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            // Visbot 机器人控制需要系统签名
+            signingConfig = signingConfigs["platform"]
+        }
         release {
             // CI 自动发布：以 runner 生成的 debug keystore 签名，保证 Release APK 可直接安装；
             // 后续正式发版可替换为上传签名密钥（secrets）方案。
@@ -58,6 +71,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)
+    // Visbot 机器人 SDK（rosa.jar）
+    implementation(files("libs/rosa.jar"))
     // sherpa-onnx 的 JitPack AAR 会传递引入 JVM 实现 jar（sherpa-onnx-jvm），
     // 与 Android AAR 内的 Kotlin 类重复冲突，需排除仅保留 AAR（含 native .so）
     implementation(libs.sherpa.onnx) {
