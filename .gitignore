@@ -59,3 +59,6 @@ Thumbs.db
 Desktop.ini
 *.swp
 *~
+
+# sherpa-onnx 编译产物（误落根目录的 *.class，勿跟踪）
+/com/
