@@ -1,28 +1,15 @@
 package org.oxff.helloxiaozhi.wake
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import android.media.audiofx.NoiseSuppressor
-import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import org.oxff.helloxiaozhi.R
 import org.oxff.helloxiaozhi.XiaoZhiApp
-import org.oxff.helloxiaozhi.ui.MainActivity
 import org.oxff.helloxiaozhi.ui.VoiceCallActivity
-import org.oxff.helloxiaozhi.util.AudioMath
 import org.oxff.helloxiaozhi.util.TonePlayer
 
 /**
@@ -38,13 +25,16 @@ import org.oxff.helloxiaozhi.util.TonePlayer
  *  - 应用启动时（XiaoZhiApp.onCreate）若配置开启则自动启动
  *  - 设置页手动开关
  *  - 系统广播（BOOT_COMPLETED 等，可选扩展）
+ *
+ * 重构后：作为协调者，将具体职责委托给专门组件：
+ *  - WakeWordAudioRecorder: 音频采集与处理
+ *  - WakeWordNotificationManager: 通知与前台服务管理
  */
 class WakeWordService : Service() {
 
     private var engine: SherpaOnnxWakeWordEngine? = null
-    private var audioRecord: AudioRecord? = null
-    private var noiseSuppressor: NoiseSuppressor? = null
-    private var recordThread: Thread? = null
+    private var audioRecorder: WakeWordAudioRecorder? = null
+    private var notificationManager: WakeWordNotificationManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     @Volatile
@@ -53,10 +43,6 @@ class WakeWordService : Service() {
     @Volatile
     private var isPaused = false
 
-    /** 录音线程活跃标志：pause 时置 false 让线程退出循环，与 isRunning 解耦 */
-    @Volatile
-    private var recordActive = false
-
     private val app: XiaoZhiApp get() = application as XiaoZhiApp
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -64,7 +50,8 @@ class WakeWordService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "WakeWordService onCreate")
-        createNotificationChannel()
+        notificationManager = WakeWordNotificationManager(this)
+        notificationManager?.createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -83,7 +70,7 @@ class WakeWordService : Service() {
                 return START_STICKY
             }
             else -> {
-                startForegroundWithNotification()
+                notificationManager?.startForegroundWithNotification()
                 startDetection()
                 return START_STICKY
             }
@@ -166,94 +153,18 @@ class WakeWordService : Service() {
     }
 
     private fun startAudioRecord() {
-        val sampleRate = engine?.sampleRate ?: 16000
-        // sherpa-onnx KWS 为流式输入，按 100ms 采样块喂入归一化 FloatArray
-        val chunkSamples = CHUNK_DURATION_MS * sampleRate / 1000
-
-        val minBufSize = AudioRecord.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-        )
-        if (minBufSize <= 0) {
-            Log.e(TAG, "AudioRecord 缓冲区大小无效: $minBufSize")
+        audioRecorder = WakeWordAudioRecorder(engine) { msg ->
+            Log.i(TAG, msg)
+        }
+        if (!audioRecorder!!.start { isRunning }) {
+            Log.e(TAG, "音频采集启动失败")
             stopSelf()
-            return
         }
-
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBufSize * 2, chunkSamples * 2),
-        ).also { record ->
-            if (record.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioRecord 初始化失败")
-                record.release()
-                stopSelf()
-                return
-            }
-            record.startRecording()
-            // 附加噪声抑制：降低背景噪声，提升次远场信噪比（唤醒场景为近场/次远场）
-            try {
-                val sessionId = record.audioSessionId
-                if (NoiseSuppressor.isAvailable() && sessionId != 0) {
-                    NoiseSuppressor.create(sessionId)?.apply {
-                        enabled = true
-                        noiseSuppressor = this
-                    }
-                }
-            } catch (_: Exception) {
-                // 设备不支持时静默降级
-            }
-        }
-
-        recordActive = true
-        recordThread = Thread({
-            val buffer = ShortArray(chunkSamples)
-            var chunkCount = 0
-            while (isRunning && recordActive) {
-                val record = audioRecord ?: break
-                val read = try {
-                    record.read(buffer, 0, chunkSamples)
-                } catch (_: Exception) {
-                    Log.e(TAG, "[wake-record] read 异常，退出线程")
-                    break
-                }
-                if (read > 0) {
-                    chunkCount++
-                    // 按原始 PCM 直接喂引擎（官方示例即原始信号，保证波形无损）
-                    if (chunkCount % 30 == 0) {
-                        val rmsIn = AudioMath.rmsLevel(buffer)
-                        Log.i(TAG, "[wake-record] chunk=$chunkCount read=$read rmsIn=$rmsIn")
-                    }
-                    val samples = FloatArray(buffer.size) { buffer[it] / 32768.0f }
-                    engine?.acceptAudio(samples)
-                } else {
-                    Log.e(TAG, "[wake-record] AudioRecord.read 返回异常: $read")
-                    if (read == AudioRecord.ERROR_INVALID_OPERATION) break
-                }
-            }
-        }, "wake-word-record").apply { start() }
     }
 
     private fun stopAudioRecord() {
-        // 先置标志让录音线程退出循环，再 join 等待其结束，最后释放 AudioRecord
-        recordActive = false
-        recordThread?.join(500)
-        recordThread = null
-        audioRecord?.let {
-            try {
-                it.stop()
-            } catch (_: Exception) {
-                // 已停止
-            }
-            it.release()
-        }
-        audioRecord = null
-        noiseSuppressor?.release()
-        noiseSuppressor = null
+        audioRecorder?.stop()
+        audioRecorder = null
     }
 
     // ---------------- 唤醒处理 ----------------
@@ -289,53 +200,6 @@ class WakeWordService : Service() {
         startActivity(intent)
     }
 
-    // ---------------- 通知与前台服务 ----------------
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.wake_notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = getString(R.string.wake_notification_channel_desc)
-                setShowBadge(false)
-            }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
-        }
-    }
-
-    private fun startForegroundWithNotification() {
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val stopIntent = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, WakeWordService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.wake_notification_title))
-            .setContentText(getString(R.string.wake_notification_text))
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentIntent(pendingIntent)
-            .addAction(
-                android.R.drawable.ic_delete,
-                getString(R.string.wake_notification_stop),
-                stopIntent,
-            )
-            .setOngoing(true)
-            .build()
-
-        startForeground(NOTIFICATION_ID, notification)
-    }
-
     // ---------------- 权限与锁 ----------------
 
     private fun checkAudioPermission(): Boolean {
@@ -364,10 +228,6 @@ class WakeWordService : Service() {
 
     companion object {
         private const val TAG = "WakeWordService"
-        private const val CHANNEL_ID = "wake_word_detection"
-        private const val NOTIFICATION_ID = 1001
-        /** 音频采集块时长（毫秒） */
-        private const val CHUNK_DURATION_MS = 100
 
         const val ACTION_STOP = "org.oxff.helloxiaozhi.wake.STOP"
         const val ACTION_PAUSE = "org.oxff.helloxiaozhi.wake.PAUSE"

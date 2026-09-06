@@ -4,6 +4,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.11.1] - 2026-09-06
+
+### Changed
+
+- 超大文件结构重构（公共 API 与行为不变，纯拆分）：
+  - `XiaoZhiController`（633 行）拆分为外观类 + 三个职责单一组件：`ConnectionManager`（连接/激活/切机）、`AudioPipeline`（音频上行/下行链路与增益）、`MessageDispatcher`（文本/音频消息分发）
+  - `VoiceCallActivity` 拆分为协调者 + `VoiceCallViewBinder`（视图绑定）/ `VoiceCallAnimationController`（通话动画与计时）/ `SmallScreenOptimizer`（小屏收起策略）
+  - `MainActivity` 的 Tab 切换逻辑提取为 `TabManager`
+  - `WakeWordService` 拆分出 `WakeWordAudioRecorder`（麦克风采集与降噪）与 `WakeWordNotificationManager`（常驻通知）
+
 ## [0.11.0] - 2026-09-06
 
 ### Added

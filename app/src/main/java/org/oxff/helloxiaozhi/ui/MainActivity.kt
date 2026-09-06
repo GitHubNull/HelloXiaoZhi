@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
-import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -35,6 +34,8 @@ import org.oxff.helloxiaozhi.wake.WakeWordService
  *
  * 所有 controller 回调集中在此绑定，再分发给各页面控制器——
  * 避免多个页面争抢单槽回调导致后绑定者胜出、先绑定者静默失效。
+ *
+ * 重构后：将 Tab 切换逻辑委托给 TabManager。
  */
 class MainActivity : AppCompatActivity() {
 
@@ -53,9 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var activationModal: ActivationModal
     private lateinit var addBotModal: AddBotModal
 
-    private var currentTab = Tab.CHAT
-
-    private enum class Tab { CHAT, CONTACTS, SETTINGS }
+    private lateinit var tabManager: TabManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 原生横屏小面板（脸屏类真机）显式请求横屏，避开厂商 ROM 强开传感器旋转
@@ -66,6 +65,8 @@ class MainActivity : AppCompatActivity() {
         val app = application as XiaoZhiApp
         controller = app.controller
         repository = app.repository
+
+        tabManager = TabManager(this)
 
         bindViews()
         bindPages()
@@ -117,14 +118,14 @@ class MainActivity : AppCompatActivity() {
             root = findViewById(R.id.page_chat),
             repository = repository,
             onOpenChat = { chatDetail.open(it) },
-            onGoContacts = { switchTab(Tab.CONTACTS) },
+            onGoContacts = { switchTab(TabManager.Tab.CONTACTS) },
         )
         contactsPage = ContactsPageController(
             root = findViewById(R.id.page_contacts),
             repository = repository,
             onOpenChat = { botId ->
                 controller.switchActiveBot(botId)
-                switchTab(Tab.CHAT)
+                switchTab(TabManager.Tab.CHAT)
                 chatDetail.open(botId)
             },
             onDeleteBot = { bot -> confirmDeleteBot(bot) },
@@ -156,9 +157,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindTabs() {
-        findViewById<View>(R.id.tab_chat).setOnClickListener { switchTab(Tab.CHAT) }
-        findViewById<View>(R.id.tab_contacts).setOnClickListener { switchTab(Tab.CONTACTS) }
-        findViewById<View>(R.id.tab_settings).setOnClickListener { switchTab(Tab.SETTINGS) }
+        tabManager.bindTabs { tab -> switchTab(tab) }
     }
 
     // ---------------- Controller 回调 ----------------
@@ -215,51 +214,21 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- Tab 切换 ----------------
 
-    private fun switchTab(tab: Tab) {
-        // 详情页是内容区最上层的不透明覆盖层：不先关闭的话，切换后的新页面会被它遮挡，
-        // 用户感知为「Tab 点击无响应」。详情页打开时点击当前 Tab 也执行关闭，回到该 Tab 列表。
-        if (chatDetail.isOpen) {
-            chatDetail.close()
-            hideIme()
-        }
-        if (currentTab == tab) return
-        currentTab = tab
+    private fun switchTab(tab: TabManager.Tab) {
+        tabManager.switchTab(
+            tab = tab,
+            onTabChanged = { renderTab(it) },
+            shouldCloseDetail = { chatDetail.isOpen },
+            onCloseDetail = { chatDetail.close() },
+        )
+    }
 
-        findViewById<View>(R.id.page_chat).visibility =
-            if (tab == Tab.CHAT) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.page_contacts).visibility =
-            if (tab == Tab.CONTACTS) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.page_settings).visibility =
-            if (tab == Tab.SETTINGS) View.VISIBLE else View.GONE
-
-        updateTabIndicator()
+    private fun renderTab(tab: TabManager.Tab) {
         when (tab) {
-            Tab.CHAT -> chatPage.render()
-            Tab.CONTACTS -> contactsPage.render()
-            Tab.SETTINGS -> settingsPage.render()
+            TabManager.Tab.CHAT -> chatPage.render()
+            TabManager.Tab.CONTACTS -> contactsPage.render()
+            TabManager.Tab.SETTINGS -> settingsPage.render()
         }
-    }
-
-    private fun updateTabIndicator() {
-        val activeColor = ContextCompat.getColor(this, R.color.xz_primary)
-        val inactiveColor = ContextCompat.getColor(this, R.color.xz_text_hint)
-
-        fun setTab(tabId: Int, iconId: Int, labelId: Int, active: Boolean) {
-            val color = if (active) activeColor else inactiveColor
-            findViewById<android.widget.ImageView>(iconId).setColorFilter(color)
-            findViewById<TextView>(labelId).setTextColor(color)
-        }
-
-        setTab(R.id.tab_chat, R.id.tab_chat_icon, R.id.tab_chat_label, currentTab == Tab.CHAT)
-        setTab(R.id.tab_contacts, R.id.tab_contacts_icon, R.id.tab_contacts_label, currentTab == Tab.CONTACTS)
-        setTab(R.id.tab_settings, R.id.tab_settings_icon, R.id.tab_settings_label, currentTab == Tab.SETTINGS)
-    }
-
-    /** 收起软键盘（详情页输入框可能持有焦点，关闭详情后键盘会残留） */
-    private fun hideIme() {
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
-        val token = (currentFocus ?: window.decorView).windowToken
-        imm.hideSoftInputFromWindow(token, 0)
     }
 
     // ---------------- 状态与渲染 ----------------
@@ -283,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         chatPage.render()
         contactsPage.render()
         settingsPage.render()
-        updateTabIndicator()
+        tabManager.updateTabIndicator()
         updateUnreadBadge()
     }
 
