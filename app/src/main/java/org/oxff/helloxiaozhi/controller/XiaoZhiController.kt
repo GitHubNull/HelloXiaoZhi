@@ -24,6 +24,8 @@ import org.oxff.helloxiaozhi.config.AppConfig
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.net.OtaClient
 import org.oxff.helloxiaozhi.net.XiaoZhiWebSocket
+import org.oxff.helloxiaozhi.robot.McpActionHandler
+import org.oxff.helloxiaozhi.robot.RobotActionRegistry
 import org.oxff.helloxiaozhi.robot.VisbotActionMapper
 import org.oxff.helloxiaozhi.robot.VisbotRobotController
 import org.oxff.helloxiaozhi.util.HandlerExecutor
@@ -133,6 +135,20 @@ class XiaoZhiController(
 
     // Visbot 机器人控制（仅在 Visbot 设备上激活）
     val robotController = VisbotRobotController(appContext)
+
+    // MCP 动作系统（主路径：服务器 AI 主动调用）
+    val robotActionRegistry = RobotActionRegistry(robotController).apply {
+        logWarn = { msg -> Log.w("RobotActionRegistry", msg) }
+        logError = { msg, e -> Log.e("RobotActionRegistry", msg, e) }
+    }
+    val mcpActionHandler = McpActionHandler(robotActionRegistry).apply {
+        enabled = config.robotActionEnabled
+        logInfo = { msg -> Log.i("McpActionHandler", msg) }
+        logWarn = { msg -> Log.w("McpActionHandler", msg) }
+        logDebug = { msg -> Log.d("McpActionHandler", msg) }
+    }
+
+    // 关键词匹配降级方案（MCP 不可用时兜底）
     val actionMapper = VisbotActionMapper(robotController).apply {
         enabled = config.robotActionEnabled
     }
@@ -184,10 +200,15 @@ class XiaoZhiController(
         // 消息分发器回调
         messageDispatcher.onChatMessage = { botId, message ->
             onChatMessage?.invoke(botId, message)
-            // AI 消息触发机器人动作映射
+            // AI 消息触发机器人动作映射（降级方案：MCP 不可用时关键词匹配）
             if (message.role == org.oxff.helloxiaozhi.chat.ChatRole.AI) {
                 actionMapper.processMessage(message.content, isAiSpeaking = audioPipeline.isAiPlaying)
             }
+        }
+        messageDispatcher.mcpActionHandler = mcpActionHandler
+        messageDispatcher.onMcpResponse = { responseJson ->
+            Log.i(TAG, "[WS] send mcp response: ${responseJson.take(300)}")
+            ws.sendText(responseJson)
         }
         messageDispatcher.onHelloReceived = { sessionId, sampleRate ->
             connectionManager.onHelloReceived(sessionId)

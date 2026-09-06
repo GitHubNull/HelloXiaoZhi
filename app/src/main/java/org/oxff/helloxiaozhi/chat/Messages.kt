@@ -1,5 +1,6 @@
 package org.oxff.helloxiaozhi.chat
 
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -28,6 +29,11 @@ data class AudioParams(
     @SerializedName("frame_duration") val frameDuration: Int = 60,
 )
 
+/** 设备能力声明（hello 消息中携带，声明 MCP 支持） */
+data class Features(
+    val mcp: Boolean = true,
+)
+
 /**
  * 连接建立后的握手消息（version 3，对齐 ref 前端 WebSocketManager.ts）。
  *
@@ -39,6 +45,7 @@ data class HelloMessage(
     val version: Int = 3,
     val transport: String = "websocket",
     @SerializedName("audio_params") val audioParams: AudioParams = AudioParams(),
+    val features: Features = Features(),
 )
 
 /** 开始/停止监听消息（session_id 对齐 ESP32 protocol.cc SendStartListening/SendStopListening） */
@@ -107,3 +114,10 @@ data class TtsMessage(
         const val STATE_SENTENCE_END = "sentence_end"
     }
 }
+
+/** MCP 消息外层封装（JSON-RPC 2.0 payload 通过 WebSocket 文本帧传输） */
+data class McpMessage(
+    val type: String = "mcp",
+    @SerializedName("session_id") val sessionId: String? = null,
+    val payload: JsonObject? = null,
+)

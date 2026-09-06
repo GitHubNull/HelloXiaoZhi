@@ -29,6 +29,10 @@ class MessagesTest {
         assertEquals(16000, audio.get("sample_rate").asInt)
         assertEquals(1, audio.get("channels").asInt)
         assertEquals(60, audio.get("frame_duration").asInt)
+
+        // MCP 能力声明
+        val features = json.getAsJsonObject("features")
+        assertEquals(true, features.get("mcp").asBoolean)
     }
 
     @Test
@@ -108,5 +112,37 @@ class MessagesTest {
         val hello = gson.fromJson("""{"type":"hello"}""", HelloResponse::class.java)
         assertEquals(null, hello.sessionId)
         assertEquals(null, hello.audioParams)
+    }
+
+    // ---------------- MCP 消息 ----------------
+
+    @Test
+    fun `MCP 消息序列化包含 type 与 payload`() {
+        val payload = com.google.gson.JsonObject()
+        payload.addProperty("jsonrpc", "2.0")
+        payload.addProperty("method", "tools/call")
+        payload.addProperty("id", 1)
+        val params = com.google.gson.JsonObject()
+        params.addProperty("name", "self.robot.nod")
+        payload.add("params", params)
+
+        val mcp = McpMessage(sessionId = "s-1", payload = payload)
+        val json = JsonParser.parseString(gson.toJson(mcp)).asJsonObject
+
+        assertEquals("mcp", json.get("type").asString)
+        assertEquals("s-1", json.get("session_id").asString)
+        val p = json.getAsJsonObject("payload")
+        assertEquals("2.0", p.get("jsonrpc").asString)
+        assertEquals("tools/call", p.get("method").asString)
+        assertEquals(1, p.get("id").asInt)
+    }
+
+    @Test
+    fun `MCP 消息反序列化`() {
+        val json = """{"type":"mcp","session_id":"s-1","payload":{"jsonrpc":"2.0","method":"initialize","id":1}}"""
+        val mcp = gson.fromJson(json, McpMessage::class.java)
+        assertEquals("mcp", mcp.type)
+        assertEquals("s-1", mcp.sessionId)
+        assertEquals("initialize", mcp.payload?.get("method")?.asString)
     }
 }

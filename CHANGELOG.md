@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.13.0] - 2026-09-07
+
+### Added
+
+- 新增 MCP（Model Context Protocol）机器人动作控制主链路（对齐 xiaozhi-esp32 的 MCP 实现，服务器端 AI 可主动调用机器人动作）：
+  - hello 握手消息新增 `features.mcp` 设备能力声明；新增 `McpMessage` 外层封装与 `mcp` 下行消息分发，响应封装后回发服务器
+  - 新增 `robot/` 动作抽象层：`RobotActionExecutor` 接口（头部/移动/表情/组合动作，`VisbotRobotController` 实现，便于单元测试 mock）、`RobotActionRegistry`（动作工具注册表，生成 `tools/list` 并按名执行 `tools/call`，命名空间 `self.robot.*`）、`McpActionHandler`（处理 `initialize` / `tools/list` / `tools/call` 三种 JSON-RPC 方法）
+  - 原关键词匹配方案 `VisbotActionMapper` 降级为 MCP 不可用时的兜底，并新增移动动作关键词（前进/后退/左转/右转/停止）
+  - 设置页「机器人动作」开关同时控制 MCP 主路径与关键词兜底
+- 新增单元测试：`RobotActionRegistryTest`（mock 执行器验证注册/查找/执行与 tools/list 生成）、`McpActionHandlerTest`（三种 MCP 方法）；`MessagesTest` 补充 `Features` / `McpMessage` 用例
+
 ## [0.12.0] - 2026-09-06
 
 ### Added

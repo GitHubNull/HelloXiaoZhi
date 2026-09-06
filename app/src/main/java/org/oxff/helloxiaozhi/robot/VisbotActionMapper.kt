@@ -6,6 +6,10 @@ import android.util.Log
  * Visbot 对话动作映射器：根据 AI 回复内容自动触发相应的物理动作和表情。
  *
  * 通过关键词匹配实现，支持自定义规则扩展。
+ *
+ * 注意：此类为 MCP 动作系统的降级兜底方案。当服务器不支持 MCP 协议
+ * 或 MCP 消息未到达时，仍可通过关键词匹配触发基本动作。
+ * 主路径请使用 McpActionHandler + RobotActionRegistry。
  */
 class VisbotActionMapper(
     private val robotController: VisbotRobotController,
@@ -47,6 +51,28 @@ class VisbotActionMapper(
             containsAny(lowerText, CENTER_HEAD_KEYWORDS) -> {
                 Log.i(TAG, "Action: center head")
                 robotController.centerHead()
+            }
+
+            // 移动动作指令
+            containsAny(lowerText, MOVE_FORWARD_KEYWORDS) -> {
+                Log.i(TAG, "Action: move forward")
+                robotController.moveForward()
+            }
+            containsAny(lowerText, MOVE_BACKWARD_KEYWORDS) -> {
+                Log.i(TAG, "Action: move backward")
+                robotController.moveBackward()
+            }
+            containsAny(lowerText, TURN_LEFT_KEYWORDS) -> {
+                Log.i(TAG, "Action: turn left")
+                robotController.turnLeft()
+            }
+            containsAny(lowerText, TURN_RIGHT_KEYWORDS) -> {
+                Log.i(TAG, "Action: turn right")
+                robotController.turnRight()
+            }
+            containsAny(lowerText, STOP_MOVING_KEYWORDS) -> {
+                Log.i(TAG, "Action: stop moving")
+                robotController.stopMoving()
             }
 
             // 情感表达
@@ -140,6 +166,13 @@ class VisbotActionMapper(
         private val LOOK_UP_KEYWORDS = arrayOf("抬头", "向上看", "look up")
         private val LOOK_DOWN_KEYWORDS = arrayOf("低头", "向下看", "look down")
         private val CENTER_HEAD_KEYWORDS = arrayOf("归中", "回正", "center")
+
+        // 移动动作关键词
+        private val MOVE_FORWARD_KEYWORDS = arrayOf("前进", "向前", "往前走", "forward", "move forward", "go ahead")
+        private val MOVE_BACKWARD_KEYWORDS = arrayOf("后退", "向后", "往后退", "backward", "move backward", "go back")
+        private val TURN_LEFT_KEYWORDS = arrayOf("左转", "向左转", "turn left", "left turn")
+        private val TURN_RIGHT_KEYWORDS = arrayOf("右转", "向右转", "turn right", "right turn")
+        private val STOP_MOVING_KEYWORDS = arrayOf("停下", "停止", "别动", "stop", "halt", "freeze")
 
         // 情感表达关键词
         private val AGREEMENT_KEYWORDS = arrayOf(

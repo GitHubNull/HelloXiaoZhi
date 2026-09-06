@@ -14,6 +14,7 @@ import org.oxff.helloxiaozhi.chat.LlmMessage
 import org.oxff.helloxiaozhi.chat.SttMessage
 import org.oxff.helloxiaozhi.chat.TtsMessage
 import org.oxff.helloxiaozhi.data.BotRepository
+import org.oxff.helloxiaozhi.robot.McpActionHandler
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,6 +51,12 @@ class MessageDispatcher(
     /** 用户开始说话回调 */
     var onUserStartSpeaking: (() -> Unit)? = null
 
+    /** MCP 响应回调（需要回发给服务器的 JSON 字符串） */
+    var onMcpResponse: ((String) -> Unit)? = null
+
+    /** MCP 动作处理器（由 XiaoZhiController 注入） */
+    var mcpActionHandler: McpActionHandler? = null
+
     /**
      * 处理接收到的文本消息
      */
@@ -67,6 +74,7 @@ class MessageDispatcher(
             "stt" -> handleStt(json, botAtParse)
             "llm" -> handleLlm(json, botAtParse)
             "tts" -> handleTts(json, botAtParse)
+            "mcp" -> handleMcp(json)
             else -> Unit
         }
     }
@@ -133,6 +141,28 @@ class MessageDispatcher(
             }
             else -> Unit
         }
+    }
+
+    /**
+     * 处理 MCP 消息（服务器下发的工具调用）
+     */
+    private fun handleMcp(json: JsonObject) {
+        val payload = json.getAsJsonObject("payload") ?: run {
+            Log.w(TAG, "[WS] mcp message missing payload")
+            return
+        }
+        val handler = mcpActionHandler ?: run {
+            Log.w(TAG, "[WS] mcp received but no handler configured")
+            return
+        }
+        Log.i(TAG, "[WS] mcp method=${payload.get("method")?.asString}")
+        val response = handler.handleMcpMessage(payload) ?: return
+        // 将响应封装为 mcp 消息回发
+        val responseWrapper = JsonObject()
+        responseWrapper.addProperty("type", "mcp")
+        json.get("session_id")?.let { responseWrapper.add("session_id", it) }
+        responseWrapper.add("payload", response)
+        onMcpResponse?.invoke(responseWrapper.toString())
     }
 
     /**

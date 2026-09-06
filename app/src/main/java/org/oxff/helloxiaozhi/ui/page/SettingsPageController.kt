@@ -120,9 +120,10 @@ class SettingsPageController(
             controller.config.aiDoneSoundEnabled = checked
         }
 
-        // 机器人动作开关
+        // 机器人动作开关（同时控制 MCP 主路径与关键词降级兜底）
         robotActionSwitch.onCheckedChange = { checked ->
             controller.config.robotActionEnabled = checked
+            controller.mcpActionHandler.enabled = checked
             controller.actionMapper.enabled = checked
         }
 
