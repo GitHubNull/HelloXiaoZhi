@@ -4,6 +4,21 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.14.0] - 2026-09-07
+
+### Added
+
+- AI 回复结束语（晚安/拜拜/再见/退下等中英文关键词）时自动挂断语音通话，且**语音播完才挂断**（不打断 AI 结束语）：
+  - `MessageDispatcher` 对 `llm` 文本与 `tts` 句子做结束语关键词检测（`FAREWELL_KEYWORDS`，忽略大小写），命中即置 `pendingFarewell` 待处理标志
+  - `AudioPipeline` 在播放队列播空（AI 语音播放完成）后消费该标志触发 `onAiFarewell`，经 `XiaoZhiController` 转发给通话页
+  - `VoiceCallActivity` 收到回调自动挂断并复位机器人、恢复唤醒词检测：语音唤醒进入则退出到后台继续监听，文字聊天进入则经 `MainActivity.EXTRA_OPEN_CHAT_DETAIL` 自动返回聊天详情页（`handleIntent`/`onNewIntent`）
+- 新增单元测试：`MessageDispatcherTest`（结束语检测：中英文关键词、大小写、`llm`/`tts` 双路径、空/`%` 控制文本不误判，共 19 个用例）
+
+### Fixed
+
+- 修复语音唤醒进入通话后，从文字聊天界面返回再进入时自动通话失效：`VoiceCallActivity` 处理 `EXTRA_AUTO_START_CALL` 时不再被 `isCallStarted()` 门控（此前 Activity 在后台存活时该标记会被丢弃）
+- 修复非 Visbot 设备上 rosa.jar `Robot.initialize` 造成的 MST 后台重连刷屏：初始化前先经 `PackageManager.resolveContentProvider` 探测 Master 服务（`com.ubtrobot.provider.master`），缺失则短路跳过 SDK，不引入任何副作用
+
 ## [0.13.0] - 2026-09-07
 
 ### Added

@@ -75,8 +75,31 @@ class MainActivity : AppCompatActivity() {
         bindTabs()
         bindRepository()
 
+        // 处理从语音通话页返回的 Intent
+        handleIntent(intent)
+
         // 首次启动：默认打开唤醒目标机器人的对话
-        repository.defaultBot()?.let { chatDetail.open(it.id) }
+        if (savedInstanceState == null) {
+            repository.defaultBot()?.let { chatDetail.open(it.id) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /**
+     * 处理 Intent：从语音通话页返回时打开聊天详情页
+     */
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_CHAT_DETAIL, false) == true) {
+            // 切换到聊天 Tab 并打开当前激活机器人的对话详情
+            switchTab(TabManager.Tab.CHAT)
+            controller.activeBotId?.let { botId ->
+                chatDetail.open(botId)
+            }
+        }
     }
 
     override fun onResume() {
@@ -357,7 +380,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private companion object {
-        const val REQUEST_RECORD_AUDIO = 100
+    companion object {
+        private const val REQUEST_RECORD_AUDIO = 100
+        /** Intent extra：打开聊天详情页（从语音通话页返回时） */
+        const val EXTRA_OPEN_CHAT_DETAIL = "extra_open_chat_detail"
     }
 }

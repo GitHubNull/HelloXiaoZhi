@@ -27,6 +27,7 @@ class AudioPipeline(
     private val audioManager: AudioManager,
     private val mainHandler: Handler,
     private val stateMachine: ChatStateMachine,
+    private val messageDispatcher: MessageDispatcher? = null,
 ) {
     /** 用户说话电平回调（驱动声浪 UI） */
     var onUserWaveLevel: ((Float) -> Unit)? = null
@@ -44,6 +45,9 @@ class AudioPipeline(
     @Volatile
     var isAiPlaying = false
         private set
+
+    /** AI 结束语回调（用于自动挂断语音通话） */
+    var onAiFarewell: (() -> Unit)? = null
 
     /** 通话会话是否存活 */
     @Volatile
@@ -69,12 +73,17 @@ class AudioPipeline(
     private val player = AudioPlayer()
 
     init {
-        // 播放队列播空 → 回到 IDLE
+        // 播放队列播空 → 回到 IDLE，并检查是否有待处理的结束语
         player.onQueueEmpty = {
             mainHandler.post {
                 isAiPlaying = false
                 if (stateMachine.state == ChatState.AI_SPEAKING) {
                     stateMachine.setState(ChatState.IDLE)
+                }
+                // AI 语音播放完成，检查是否有待处理的结束语
+                if (messageDispatcher?.consumePendingFarewell() == true) {
+                    Log.i(TAG, "AI 语音播放完成，触发结束语回调")
+                    onAiFarewell?.invoke()
                 }
             }
         }

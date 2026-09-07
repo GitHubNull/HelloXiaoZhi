@@ -130,8 +130,8 @@ class XiaoZhiController(
 
     // 专门组件
     private val connectionManager: ConnectionManager = ConnectionManager(config, repository, ws, ActivationFlow(OtaClient(okHttp, gson)), mainHandler)
-    private val audioPipeline: AudioPipeline = AudioPipeline(audioManager, mainHandler, stateMachine)
     private val messageDispatcher: MessageDispatcher = MessageDispatcher(gson, repository, mainHandler, stateMachine)
+    private val audioPipeline: AudioPipeline = AudioPipeline(audioManager, mainHandler, stateMachine, messageDispatcher)
 
     // Visbot 机器人控制（仅在 Visbot 设备上激活）
     val robotController = VisbotRobotController(appContext)
@@ -162,6 +162,8 @@ class XiaoZhiController(
     var onActivationCodeRequired: ((String) -> Unit)? = null
     var onActivationCompleted: (() -> Unit)? = null
     var onError: ((String) -> Unit)? = null
+    /** AI 回复结束语回调（用于自动挂断语音通话） */
+    var onAiFarewell: (() -> Unit)? = null
 
     // 公开属性
     val connectionStatus: ConnectionStatus get() = connectionManager.connectionStatus
@@ -226,6 +228,11 @@ class XiaoZhiController(
         }
         messageDispatcher.onUserStartSpeaking = {
             // 用户开始说话时的额外处理
+        }
+        // AI 结束语回调由 AudioPipeline 在播放完成后触发（见 audioPipeline.onAiFarewell）
+        audioPipeline.onAiFarewell = {
+            // AI 回复结束语，通知 UI 自动挂断
+            onAiFarewell?.invoke()
         }
 
         // 状态机状态变更联动机器人表情

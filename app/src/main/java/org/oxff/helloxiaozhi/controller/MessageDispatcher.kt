@@ -51,6 +51,14 @@ class MessageDispatcher(
     /** 用户开始说话回调 */
     var onUserStartSpeaking: (() -> Unit)? = null
 
+    /** AI 回复结束语回调（用于自动挂断语音通话） */
+    var onAiFarewell: (() -> Unit)? = null
+
+    /** 待处理的结束语标志：检测到结束语后置位，等 AI 语音播放完成后再触发回调 */
+    @Volatile
+    var pendingFarewell = false
+        private set
+
     /** MCP 响应回调（需要回发给服务器的 JSON 字符串） */
     var onMcpResponse: ((String) -> Unit)? = null
 
@@ -117,7 +125,20 @@ class MessageDispatcher(
         message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
             Log.i(TAG, "[WS] llm text=「$it」")
             appendChat(botAtParse, ChatRole.AI, it)
+            // 检测结束语，标记待处理（等 AI 语音播放完成后再触发回调）
+            if (isFarewellMessage(it)) {
+                Log.i(TAG, "[WS] 检测到 AI 结束语，标记待处理")
+                pendingFarewell = true
+            }
         }
+    }
+
+    /**
+     * 检测 AI 回复是否为结束语（晚安、拜拜等）
+     */
+    private fun isFarewellMessage(text: String): Boolean {
+        val lowerText = text.lowercase()
+        return FAREWELL_KEYWORDS.any { keyword -> lowerText.contains(keyword) }
     }
 
     /**
@@ -134,6 +155,11 @@ class MessageDispatcher(
                 if (text.isNotEmpty() && !text.startsWith("%")) {
                     Log.i(TAG, "[WS] tts sentence=「$text」")
                     appendChat(botAtParse, ChatRole.AI, text)
+                    // TTS 句子也可能是结束语（小智协议中 AI 回复文本可能通过 tts 下发）
+                    if (isFarewellMessage(text)) {
+                        Log.i(TAG, "[WS] 检测到 AI 结束语(tts)，标记待处理")
+                        pendingFarewell = true
+                    }
                 }
             }
             TtsMessage.STATE_STOP -> {
@@ -179,8 +205,23 @@ class MessageDispatcher(
         mainHandler.post { onChatMessage?.invoke(id, message) }
     }
 
+    /**
+     * 消费待处理的结束语：AI 语音播放完成后调用，返回 true 表示有待处理的结束语
+     */
+    fun consumePendingFarewell(): Boolean {
+        val pending = pendingFarewell
+        pendingFarewell = false
+        return pending
+    }
+
     private companion object {
         const val TAG = "MessageDispatcher"
         const val DEFAULT_SAMPLE_RATE = 16000
+
+        /** AI 结束语关键词（用于自动挂断语音通话） */
+        val FAREWELL_KEYWORDS = listOf(
+            "晚安", "拜拜", "再见", "拜", "bye", "goodbye", "good night", "goodnight",
+            "退下", "先退", "我走了", "先走了", "告辞", "失陪"
+        )
     }
 }

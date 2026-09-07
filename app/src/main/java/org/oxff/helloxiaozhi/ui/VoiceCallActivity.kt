@@ -110,7 +110,9 @@ class VoiceCallActivity : AppCompatActivity() {
             if (!targetBotId.isNullOrBlank() && controller.activeBotId != targetBotId) {
                 controller.switchActiveBot(targetBotId)
             }
-            if (it.getBooleanExtra(EXTRA_AUTO_START_CALL, false) && !animationController.isCallStarted()) {
+            // 语音唤醒场景：只要 EXTRA_AUTO_START_CALL=true 就标记，不管通话是否已开始
+            // （之前从文字聊天进入后返回，VoiceCallActivity 可能还在后台，此时 isCallStarted=true）
+            if (it.getBooleanExtra(EXTRA_AUTO_START_CALL, false)) {
                 autoStartCall = true
             }
         }
@@ -207,6 +209,10 @@ class VoiceCallActivity : AppCompatActivity() {
                 controller.startVoiceCall()
             }
         }
+        // AI 回复结束语：自动挂断并返回聊天详情页
+        controller.onAiFarewell = {
+            hangUpAndReturnToChat()
+        }
         animationController.updateCallState(controller.chatState)
     }
 
@@ -217,6 +223,7 @@ class VoiceCallActivity : AppCompatActivity() {
         controller.onAiWaveLevel = null
         controller.onError = null
         controller.onConnectionStatusChanged = null
+        controller.onAiFarewell = null
     }
 
     // ---------------- 通话控制 ----------------
@@ -249,6 +256,38 @@ class VoiceCallActivity : AppCompatActivity() {
         // 挂断后恢复唤醒词检测
         WakeWordService.resume(this)
         mainHandler.postDelayed({ finish() }, 900)
+    }
+
+    /**
+     * 挂断并根据进入来源决定退出行为（AI 回复结束语时自动触发）
+     *
+     * 两种场景：
+     *  1. 从文字聊天界面进入（autoStartCall=false）：返回到聊天详情页
+     *  2. 从语音唤醒进入（autoStartCall=true）：直接退出到后台，继续监听唤醒词
+     */
+    private fun hangUpAndReturnToChat() {
+        controller.stopVoiceCall()
+        // 机器人复位：归中头部、停止移动、消除表情
+        controller.robotController.resetToDefault()
+        viewBinder.toastHost.show(getString(R.string.call_finished), ToastHost.Kind.NORMAL, 1200)
+        // 挂断后恢复唤醒词检测
+        WakeWordService.resume(this)
+        
+        // 根据进入来源决定退出行为
+        if (autoStartCall) {
+            // 从语音唤醒进入：直接退出到后台，不打开应用界面
+            mainHandler.postDelayed({ finish() }, 900)
+        } else {
+            // 从文字聊天界面进入：返回到聊天详情页
+            mainHandler.postDelayed({
+                val intent = Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(MainActivity.EXTRA_OPEN_CHAT_DETAIL, true)
+                }
+                startActivity(intent)
+                finish()
+            }, 900)
+        }
     }
 
     companion object {
