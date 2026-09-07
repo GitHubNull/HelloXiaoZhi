@@ -27,6 +27,20 @@ class VisbotRobotController(private val context: Context) : RobotActionExecutor 
     val emotionController: VisbotEmotionController by lazy { VisbotEmotionController() }
 
     init {
+        // 非 Visbot 设备跳过 SDK 初始化：见 initSdk()
+        initSdk()
+    }
+
+    /** 初始化 SDK 并检测可用性（仅 Visbot 设备执行完整逻辑） */
+    private fun initSdk() {
+        // rosa.jar 的 Robot.initialize() 会在后台创建 AutoReconnectConnection 线程，
+        // 持续尝试连接 com.ubtrobot.provider.master；普通设备上该服务不存在，
+        // 导致 MST 刷屏与无意义的后台重连。这里在初始化前先轻量探测设备，
+        // 缺失则直接短路，不调用 SDK、不引入副作用。
+        if (!isVisbotDevice()) {
+            Log.i(TAG, "Not a Visbot device, skip Robot SDK init")
+            return
+        }
         try {
             Robot.initialize(context.applicationContext)
             Log.i(TAG, "Visbot Robot SDK initialized")
@@ -41,6 +55,16 @@ class VisbotRobotController(private val context: Context) : RobotActionExecutor 
             _isAvailable = false
         }
     }
+
+    /**
+     * 是否为 Visbot 机器人设备：探测 Master ContentProvider 是否存在。
+     * 仅查 PackageManager（解析 authority），不启动服务进程、不触发 Provider 创建，
+     * 与 rosa.jar 连接使用的 authority 一致（ConnectMasterSideConnection#AUTHORITY）。
+     */
+    @Suppress("DEPRECATION") // resolveContentProvider(String,int) 在 API 33+ 有新 PackageInfoFlags 重载
+    private fun isVisbotDevice(): Boolean = runCatching {
+        context.packageManager.resolveContentProvider(MASTER_PROVIDER_AUTHORITY, 0) != null
+    }.getOrDefault(false)
 
     // ---------------- 舵机动作 ----------------
 
@@ -292,5 +316,8 @@ class VisbotRobotController(private val context: Context) : RobotActionExecutor 
 
     companion object {
         private const val TAG = "VisbotRobotController"
+
+        /** rosa.jar 连接 Master 服务的 ContentProvider authority（用于探测 Visbot 设备） */
+        private const val MASTER_PROVIDER_AUTHORITY = "com.ubtrobot.provider.master"
     }
 }
