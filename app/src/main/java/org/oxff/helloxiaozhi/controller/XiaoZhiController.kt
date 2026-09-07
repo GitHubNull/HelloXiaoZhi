@@ -28,6 +28,9 @@ import org.oxff.helloxiaozhi.robot.McpActionHandler
 import org.oxff.helloxiaozhi.robot.RobotActionRegistry
 import org.oxff.helloxiaozhi.robot.VisbotActionMapper
 import org.oxff.helloxiaozhi.robot.VisbotRobotController
+import org.oxff.helloxiaozhi.music.MusicActionMapper
+import org.oxff.helloxiaozhi.music.MusicLibrary
+import org.oxff.helloxiaozhi.music.MusicPlayer
 import org.oxff.helloxiaozhi.util.HandlerExecutor
 import org.oxff.helloxiaozhi.util.HandlerSilenceScheduler
 import org.oxff.helloxiaozhi.util.TonePlayer
@@ -136,8 +139,24 @@ class XiaoZhiController(
     // Visbot 机器人控制（仅在 Visbot 设备上激活）
     val robotController = VisbotRobotController(appContext)
 
+    // 音乐播放模块
+    val musicLibrary = MusicLibrary(appContext)
+    val musicPlayer = MusicPlayer(appContext).apply {
+        // 音乐播放时暂停 TTS，音乐停止时恢复 TTS
+        onMusicStart = {
+            if (audioPipeline.inVoiceCall) {
+                audioPipeline.pausePlayback()
+            }
+        }
+        onMusicStop = {
+            if (audioPipeline.inVoiceCall) {
+                audioPipeline.resumePlayback()
+            }
+        }
+    }
+
     // MCP 动作系统（主路径：服务器 AI 主动调用）
-    val robotActionRegistry = RobotActionRegistry(robotController).apply {
+    val robotActionRegistry = RobotActionRegistry(robotController, musicPlayer, musicLibrary).apply {
         logWarn = { msg -> Log.w("RobotActionRegistry", msg) }
         logError = { msg, e -> Log.e("RobotActionRegistry", msg, e) }
     }
@@ -151,6 +170,11 @@ class XiaoZhiController(
     // 关键词匹配降级方案（MCP 不可用时兜底）
     val actionMapper = VisbotActionMapper(robotController).apply {
         enabled = config.robotActionEnabled
+    }
+
+    // 音乐关键词匹配降级方案
+    val musicActionMapper = MusicActionMapper(musicPlayer, musicLibrary).apply {
+        enabled = config.musicEnabled
     }
 
     // UI 回调
@@ -208,6 +232,7 @@ class XiaoZhiController(
             }
         }
         messageDispatcher.mcpActionHandler = mcpActionHandler
+        messageDispatcher.musicActionMapper = musicActionMapper
         messageDispatcher.onMcpResponse = { responseJson ->
             Log.i(TAG, "[WS] send mcp response: ${responseJson.take(300)}")
             ws.sendText(responseJson)
@@ -297,6 +322,8 @@ class XiaoZhiController(
         ws.disconnect()
         scope.cancel()
         TonePlayer.release()
+        musicPlayer.release()
+        musicLibrary.shutdown()
     }
 
     private fun resetStateMachine() {

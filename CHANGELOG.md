@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.0] - 2026-09-08
+
+### Added
+
+- 新增本地音乐播放控制功能（默认关闭，设置页「音乐播放」卡片开启）：
+  - 新增 `music/` 包：`MusicPlayer`（MediaPlayer 播放引擎：播放/暂停/恢复/停止/上下首、播放队列、音频焦点管理，播放时经 `onMusicStart`/`onMusicStop` 与语音 TTS 播放协调互斥）、`MusicLibrary`（本地目录与 SAF 文档树递归扫描、MediaMetadataRetriever 元数据提取、曲目 JSON 缓存、按曲名/歌手/类型搜索）、`MusicActionMapper`（语音指令关键词降级方案：播放/暂停/继续/停止/切歌/随机/按类型等，命中即本地执行，不再走服务器流程）
+  - `RobotActionRegistry` 注册 `self.music.*` MCP 动作工具（play/pause/resume/stop/next/previous/list），`RobotAction.Category` 新增 `MUSIC`；音乐播放期间暂停语音通话 TTS 播放，停止后自动恢复
+  - 设置页新增「音乐播放」卡片：功能开关、本地目录/SAF 文档树选择（`takePersistableUriPermission` 持久化读取授权）、扫描按钮、曲目数与扫描状态显示
+  - Manifest 新增 `READ_EXTERNAL_STORAGE` / `READ_MEDIA_AUDIO` 权限
+- 新增单元测试：`MusicActionMapperTest`（各类指令关键词匹配与未匹配兜底）、`MusicLibraryTest`（本地/SAF 扫描、搜索、缓存）；`RobotActionRegistryTest` 补充 `self.music.*` 动作注册用例
+
 ## [0.14.0] - 2026-09-07
 
 ### Added

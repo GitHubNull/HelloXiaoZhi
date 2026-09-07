@@ -15,6 +15,7 @@ import org.oxff.helloxiaozhi.chat.SttMessage
 import org.oxff.helloxiaozhi.chat.TtsMessage
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.robot.McpActionHandler
+import org.oxff.helloxiaozhi.music.MusicActionMapper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,6 +66,9 @@ class MessageDispatcher(
     /** MCP 动作处理器（由 XiaoZhiController 注入） */
     var mcpActionHandler: McpActionHandler? = null
 
+    /** 音乐动作映射器（由 XiaoZhiController 注入） */
+    var musicActionMapper: MusicActionMapper? = null
+
     /**
      * 处理接收到的文本消息
      */
@@ -104,9 +108,16 @@ class MessageDispatcher(
      */
     private fun handleStt(json: JsonObject, botAtParse: String?) {
         val message = gson.fromJson(json, SttMessage::class.java)
-        message.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            Log.i(TAG, "[WS] stt text=「$it」")
-            appendChat(botAtParse, ChatRole.USER, it)
+        message.text?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
+            Log.i(TAG, "[WS] stt text=「$text」")
+
+            // 音乐关键词匹配降级：若匹配成功则直接执行本地音乐控制，不再走服务器流程
+            if (musicActionMapper?.processText(text) == true) {
+                Log.i(TAG, "[WS] stt matched music command, skip server processing")
+                return@let
+            }
+
+            appendChat(botAtParse, ChatRole.USER, text)
         }
         // 服务器端 VAD 检测到用户说话
         mainHandler.post {

@@ -2,20 +2,25 @@ package org.oxff.helloxiaozhi.robot
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import org.oxff.helloxiaozhi.music.MusicLibrary
+import org.oxff.helloxiaozhi.music.MusicPlayer
 
 /**
  * 动作注册表：集中管理所有可用的机器人动作工具。
  *
  * 职责：
- *  - 注册全部动作（头部/移动/表情/组合）
+ *  - 注册全部动作（头部/移动/表情/组合/音乐）
  *  - 生成 MCP tools/list 响应（JSON-RPC 格式）
  *  - 按名称查找动作并执行（tools/call 分发）
  *
  * 动作命名规范：self.robot.<action>，与 xiaozhi-esp32 的
  * self.audio_speaker.*、self.light.* 等命名空间保持一致。
+ * 音乐动作为 self.music.<action>。
  */
 class RobotActionRegistry(
     private val executor: RobotActionExecutor,
+    private val musicPlayer: MusicPlayer? = null,
+    private val musicLibrary: MusicLibrary? = null,
 ) {
 
     /** 日志钩子（生产环境注入 android.util.Log，单元测试默认 no-op） */
@@ -38,6 +43,7 @@ class RobotActionRegistry(
         registerMotionActions()
         registerEmotionActions()
         registerComboActions()
+        registerMusicActions()
     }
 
     // ---------------- 注册 ----------------
@@ -391,6 +397,113 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.resetToDefault()
+                true
+            },
+        ))
+    }
+
+    // ---------------- 音乐动作 ----------------
+
+    private fun registerMusicActions() {
+        val player = musicPlayer ?: return
+        val library = musicLibrary ?: return
+
+        register(RobotAction(
+            name = "self.music.play",
+            description = "播放音乐。可通过 track 指定曲名或歌手，通过 genre 指定类型，或设置 random 为 true 随机播放",
+            category = Category.MUSIC,
+            params = listOf(
+                ActionParam("track", "string", "曲名或歌手关键词"),
+                ActionParam("genre", "string", "音乐类型（如：轻音乐、摇滚、流行、古典、爵士）"),
+                ActionParam("random", "boolean", "是否随机播放", default = false),
+            ),
+            executor = { params ->
+                val trackKeyword = params["track"] as? String
+                val genre = params["genre"] as? String
+                val random = params["random"] as? Boolean ?: false
+
+                val track = when {
+                    !trackKeyword.isNullOrEmpty() -> {
+                        // 按关键词搜索（标题或歌手）
+                        library.search(trackKeyword).firstOrNull()
+                    }
+                    !genre.isNullOrEmpty() -> {
+                        // 按类型随机
+                        library.randomByGenre(genre)
+                    }
+                    random -> {
+                        // 随机播放
+                        library.randomTrack()
+                    }
+                    else -> null
+                }
+
+                if (track != null) {
+                    player.play(track)
+                    true
+                } else {
+                    logWarn("No track found for play: track=$trackKeyword, genre=$genre, random=$random")
+                    false
+                }
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.pause",
+            description = "暂停音乐播放",
+            category = Category.MUSIC,
+            executor = {
+                player.pause()
+                true
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.resume",
+            description = "恢复音乐播放",
+            category = Category.MUSIC,
+            executor = {
+                player.resume()
+                true
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.stop",
+            description = "停止音乐播放",
+            category = Category.MUSIC,
+            executor = {
+                player.stop()
+                true
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.next",
+            description = "播放下一首",
+            category = Category.MUSIC,
+            executor = {
+                player.next()
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.previous",
+            description = "播放上一首",
+            category = Category.MUSIC,
+            executor = {
+                player.previous()
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.list",
+            description = "列出当前音乐库中的所有曲目",
+            category = Category.MUSIC,
+            executor = {
+                // 返回曲目列表信息（通过日志输出，实际结果由 MCP 响应携带）
+                val tracks = library.allTracks()
+                logWarn("Music library: ${tracks.size} tracks")
                 true
             },
         ))

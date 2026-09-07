@@ -37,4 +37,4 @@ data class RobotAction(
 )
 
 /** 动作分类 */
-enum class Category { HEAD, MOTION, EMOTION, COMBO }
+enum class Category { HEAD, MOTION, EMOTION, COMBO, MUSIC }

@@ -6,10 +6,18 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.oxff.helloxiaozhi.music.MusicLibrary
+import org.oxff.helloxiaozhi.music.MusicPlayer
+import org.oxff.helloxiaozhi.music.MusicSource
+import org.oxff.helloxiaozhi.music.MusicTrack
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 /**
  * RobotActionRegistry 单元测试：动作注册、查找、执行与 tools/list JSON 生成。
  */
+@RunWith(RobolectricTestRunner::class)
 class RobotActionRegistryTest {
 
     /** 记录调用的 mock 执行器 */
@@ -42,6 +50,14 @@ class RobotActionRegistryTest {
     private fun newRegistry(): Pair<RobotActionRegistry, RecordingExecutor> {
         val executor = RecordingExecutor()
         return RobotActionRegistry(executor) to executor
+    }
+
+    private fun newRegistryWithMusic(): Triple<RobotActionRegistry, RecordingExecutor, FakeMusicPlayer> {
+        val executor = RecordingExecutor()
+        val context = RuntimeEnvironment.getApplication()
+        val musicPlayer = FakeMusicPlayer(context)
+        val musicLibrary = FakeMusicLibrary(context)
+        return Triple(RobotActionRegistry(executor, musicPlayer, musicLibrary), executor, musicPlayer)
     }
 
     // ---------------- 注册与查找 ----------------
@@ -167,5 +183,124 @@ class RobotActionRegistryTest {
         val enumValues = nameParam.getAsJsonArray("enum").map { it.asString }
         assertTrue("happy" in enumValues)
         assertTrue("excited" in enumValues)
+    }
+
+    // ---------------- 音乐动作 ----------------
+
+    @Test
+    fun `注册表包含音乐动作分类`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val actions = registry.allActions()
+        val categories = actions.map { it.category }.toSet()
+        assertTrue(Category.MUSIC in categories)
+    }
+
+    @Test
+    fun `按名称查找音乐动作`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        assertNotNull(registry.findAction("self.music.play"))
+        assertNotNull(registry.findAction("self.music.pause"))
+        assertNotNull(registry.findAction("self.music.stop"))
+        assertNotNull(registry.findAction("self.music.next"))
+        assertNotNull(registry.findAction("self.music.previous"))
+    }
+
+    @Test
+    fun `执行音乐播放动作`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertTrue(registry.execute("self.music.play", mapOf("track" to "晴天")))
+        assertTrue(musicPlayer.playCalled)
+    }
+
+    @Test
+    fun `执行音乐暂停动作`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertTrue(registry.execute("self.music.pause", emptyMap()))
+        assertTrue(musicPlayer.pauseCalled)
+    }
+
+    @Test
+    fun `执行音乐停止动作`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertTrue(registry.execute("self.music.stop", emptyMap()))
+        assertTrue(musicPlayer.stopCalled)
+    }
+
+    @Test
+    fun `执行音乐下一首动作`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertTrue(registry.execute("self.music.next", emptyMap()))
+        assertTrue(musicPlayer.nextCalled)
+    }
+
+    @Test
+    fun `执行音乐上一首动作`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertTrue(registry.execute("self.music.previous", emptyMap()))
+        assertTrue(musicPlayer.previousCalled)
+    }
+
+    @Test
+    fun `音乐动作 tools list JSON 包含 play 工具`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val tools = registry.buildToolsListJson()
+        val playTool = (0 until tools.size())
+            .map { tools[it].asJsonObject }
+            .first { it.get("name").asString == "self.music.play" }
+        val props = playTool.getAsJsonObject("inputSchema").getAsJsonObject("properties")
+        assertTrue(props.has("track"))
+        assertTrue(props.has("genre"))
+        assertTrue(props.has("random"))
+    }
+
+    // ---------------- 测试替身 ----------------
+
+    private class FakeMusicPlayer(context: android.content.Context) : MusicPlayer(context) {
+        var playCalled = false
+        var pauseCalled = false
+        var stopCalled = false
+        var nextCalled = false
+        var previousCalled = false
+
+        override fun play(track: MusicTrack) {
+            playCalled = true
+        }
+
+        override fun pause() {
+            pauseCalled = true
+        }
+
+        override fun stop() {
+            stopCalled = true
+        }
+
+        override fun next(): Boolean {
+            nextCalled = true
+            return true
+        }
+
+        override fun previous(): Boolean {
+            previousCalled = true
+            return true
+        }
+    }
+
+    private class FakeMusicLibrary(context: android.content.Context) : MusicLibrary(context) {
+        var tracks: List<MusicTrack> = listOf(
+            MusicTrack("1", "晴天", "周杰伦", 200000, "/music/sunny.mp3", MusicSource.LOCAL),
+        )
+
+        override fun allTracks(): List<MusicTrack> = tracks
+
+        override fun search(keyword: String): List<MusicTrack> {
+            val lower = keyword.lowercase()
+            return tracks.filter {
+                it.title.lowercase().contains(lower) || it.artist.lowercase().contains(lower)
+            }
+        }
+
+        override fun randomTrack(): MusicTrack? = tracks.randomOrNull()
+
+        override fun randomByGenre(genre: String): MusicTrack? = tracks.randomOrNull()
     }
 }

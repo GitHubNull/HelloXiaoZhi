@@ -3,9 +3,11 @@ package org.oxff.helloxiaozhi.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -55,6 +57,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var addBotModal: AddBotModal
 
     private lateinit var tabManager: TabManager
+
+    // SAF 目录选择 launcher（音乐设置）
+    private val localDirLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.data?.let { uri ->
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            controller.config.musicLocalPath = uri.toString()
+            settingsPage.render()
+        }
+    }
+
+    private val safDirLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.data?.let { uri ->
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            controller.config.musicSafUri = uri.toString()
+            settingsPage.render()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 原生横屏小面板（脸屏类真机）显式请求横屏，避开厂商 ROM 强开传感器旋转
@@ -161,6 +180,8 @@ class MainActivity : AppCompatActivity() {
             toast = toastHost,
             onReset = { confirmReset() },
             onGetCode = { controller.ensureConnected() },
+            localDirLauncher = localDirLauncher,
+            safDirLauncher = safDirLauncher,
         )
         chatDetail = ChatDetailController(
             container = chatDetailContainer,

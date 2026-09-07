@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 音乐播放：读取本地音频文件 -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- API 33+ 读取音频文件 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Visbot 机器人控制权限 -->
     <uses-permission android:name="com.ubtrobot.permission.ROBOT" />
 

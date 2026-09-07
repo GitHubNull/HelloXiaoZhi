@@ -33,6 +33,10 @@ class AppConfig(context: Context) {
         private const val KEY_WAKE_SOUND_ENABLED = "wake_sound_enabled"
         private const val KEY_AI_DONE_SOUND_ENABLED = "ai_done_sound_enabled"
         private const val KEY_ROBOT_ACTION_ENABLED = "robot_action_enabled"
+        private const val KEY_MUSIC_ENABLED = "music_enabled"
+        private const val KEY_MUSIC_LOCAL_PATH = "music_local_path"
+        private const val KEY_MUSIC_SAF_URI = "music_saf_uri"
+        private const val KEY_MUSIC_CACHE_VERSION = "music_cache_version"
     }
 
     /** WebSocket 服务器地址（官方或自建代理） */
@@ -103,6 +107,26 @@ class AppConfig(context: Context) {
     var robotActionEnabled: Boolean
         get() = sp.getBoolean(KEY_ROBOT_ACTION_ENABLED, true)
         set(value) = sp.edit().putBoolean(KEY_ROBOT_ACTION_ENABLED, value).apply()
+
+    /** 是否启用音乐播放功能（默认关闭） */
+    var musicEnabled: Boolean
+        get() = sp.getBoolean(KEY_MUSIC_ENABLED, false)
+        set(value) = sp.edit().putBoolean(KEY_MUSIC_ENABLED, value).apply()
+
+    /** 本地音乐目录路径（空表示未配置） */
+    var musicLocalPath: String
+        get() = sp.getString(KEY_MUSIC_LOCAL_PATH, "") ?: ""
+        set(value) = sp.edit().putString(KEY_MUSIC_LOCAL_PATH, value).apply()
+
+    /** SAF 文档树 URI（空表示未配置） */
+    var musicSafUri: String
+        get() = sp.getString(KEY_MUSIC_SAF_URI, "") ?: ""
+        set(value) = sp.edit().putString(KEY_MUSIC_SAF_URI, value).apply()
+
+    /** 音乐缓存版本号（用于缓存失效判断） */
+    var musicCacheVersion: Int
+        get() = sp.getInt(KEY_MUSIC_CACHE_VERSION, 0)
+        set(value) = sp.edit().putInt(KEY_MUSIC_CACHE_VERSION, value).apply()
 
     /**
      * 清空全部配置，回到默认值（设置页「重置应用数据」）。
