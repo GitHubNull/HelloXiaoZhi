@@ -4,6 +4,14 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.15.1] - 2026-09-08
+
+### Fixed
+
+- 修复系统语音助手状态检测不准确：设置页「系统语音助手」卡片此前仅读取 `voice_interaction_service` 单键并用子串匹配，导致「已设为默认语音助手却显示未设置」。新增 `assistant/AssistantStatusDetector` 分层检测，依次并集「ROLE_ASSISTANT 角色公开 API → 角色反射兜底（`getRoleHolders` 隐藏 API）→ 标准 Secure 键（voice_interaction_service / assistant）→ 已知国产 ROM 私有键（一加 `oneplus_default_voice_assist_picker_service`）」，任一来源指向本应用即判定已设置；组件串统一经 `ComponentName` 解析后与包名精确相等，替代子串匹配避免误报。
+- 检测未命中时输出诊断日志（各来源原始值 + 厂商/品牌/SDK），便于上报未覆盖的国产 ROM 私有键；`SettingsPageController.updateAssistantStatus()` 改接该检测器。
+- 新增单元测试 `AssistantStatusDetectorTest`（15 个用例），覆盖各检测来源与 `flatRefersToPackage` 各种组件串形态及防误报。
+
 ## [0.15.0] - 2026-09-08
 
 ### Added

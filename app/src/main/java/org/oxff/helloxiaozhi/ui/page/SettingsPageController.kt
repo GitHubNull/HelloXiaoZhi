@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.oxff.helloxiaozhi.R
+import org.oxff.helloxiaozhi.assistant.AssistantStatusDetector
 import org.oxff.helloxiaozhi.controller.XiaoZhiController
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.ui.adapter.WakeTargetAdapter
@@ -318,12 +319,10 @@ class SettingsPageController(
 
     private fun updateAssistantStatus() {
         val context = root.context
+        // 多数据源检测（role + Secure 键），修复「已设为默认语音助手却显示未设置」：
+        // Android 10+ 默认助手以 ROLE_ASSISTANT 角色为准，Secure 键仅是框架回写的兼容层
         val isDefault = try {
-            val flat = Settings.Secure.getString(
-                context.contentResolver,
-                "voice_interaction_service",
-            )
-            flat?.contains(context.packageName) == true
+            AssistantStatusDetector.isDefaultAssistant(context)
         } catch (_: Exception) {
             false
         }
