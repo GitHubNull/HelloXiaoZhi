@@ -125,7 +125,7 @@ class AppConfig(context: Context) {
 
     /** 音乐缓存版本号（用于缓存失效判断） */
     var musicCacheVersion: Int
-        get() = sp.getInt(KEY_MUSIC_CACHE_VERSION, 0)
+        get() = sp.getInt(KEY_MUSIC_CACHE_VERSION, 1)
         set(value) = sp.edit().putInt(KEY_MUSIC_CACHE_VERSION, value).apply()
 
     /**

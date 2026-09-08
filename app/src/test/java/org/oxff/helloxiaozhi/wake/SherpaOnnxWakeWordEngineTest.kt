@@ -55,8 +55,9 @@ class SherpaOnnxWakeWordEngineTest {
     }
 
     @Test
-    fun `默认唤醒词为小智小智`() {
-        assertEquals("小智小智", SherpaOnnxWakeWordEngine.DEFAULT_KEYWORD)
+    fun `默认唤醒词为阿妹阿妹`() {
+        // 与 SherpaOnnxWakeWordEngine.DEFAULT_KEYWORD 同步（此前断言仍为旧值 "小智小智" 导致失败）
+        assertEquals("阿妹阿妹", SherpaOnnxWakeWordEngine.DEFAULT_KEYWORD)
         assertTrue(SherpaOnnxWakeWordEngine.DEFAULT_KEYWORD.isNotBlank())
     }
 }

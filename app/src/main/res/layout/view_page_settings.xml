@@ -369,22 +369,16 @@
                     android:text="@string/settings_robot_status_unavailable" />
             </LinearLayout>
 
-            <!-- 音乐播放 -->
+            <!-- 音乐设置入口（跳转独立音乐配置页） -->
             <LinearLayout
                 style="@style/Xz.Card"
                 android:layout_marginTop="8dp">
 
-                <TextView
-                    style="@style/Xz.Text.GroupTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
-                    android:text="@string/settings_group_music" />
-
-                <!-- 音乐功能开关 -->
                 <LinearLayout
+                    android:id="@+id/btn_music_settings_entry"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -398,126 +392,24 @@
                             style="@style/Xz.Text.LabelStrong"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/settings_music_enable" />
+                            android:text="@string/settings_music_entry" />
 
                         <TextView
                             style="@style/Xz.Text.Hint"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="@string/settings_music_enable_hint" />
+                            android:text="@string/settings_music_entry_hint" />
                     </LinearLayout>
 
-                    <org.oxff.helloxiaozhi.ui.view.XzSwitch
-                        android:id="@+id/music_switch"
-                        android:layout_width="48dp"
-                        android:layout_height="28dp"
-                        android:layout_marginStart="12dp" />
-                </LinearLayout>
-
-                <!-- 本地音乐目录 -->
-                <TextView
-                    style="@style/Xz.Text.Label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/settings_music_local_path" />
-
-                <TextView
-                    style="@style/Xz.Text.Hint"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/settings_music_local_path_hint" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
                     <TextView
-                        android:id="@+id/music_local_path_text"
-                        style="@style/Xz.Text.Hint"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="@string/settings_music_not_configured" />
-
-                    <TextView
-                        android:id="@+id/btn_music_local_select"
-                        style="@style/Xz.Button.Ghost"
+                        style="@style/Xz.Text.Label"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/settings_music_select" />
+                        android:layout_marginStart="12dp"
+                        android:text="›"
+                        android:textSize="20sp" />
                 </LinearLayout>
-
-                <!-- 网络共享目录 -->
-                <TextView
-                    style="@style/Xz.Text.Label"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/settings_music_saf_uri" />
-
-                <TextView
-                    style="@style/Xz.Text.Hint"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/settings_music_saf_uri_hint" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/music_saf_uri_text"
-                        style="@style/Xz.Text.Hint"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="@string/settings_music_not_configured" />
-
-                    <TextView
-                        android:id="@+id/btn_music_saf_select"
-                        style="@style/Xz.Button.Ghost"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/settings_music_select" />
-                </LinearLayout>
-
-                <!-- 扫描音乐库 -->
-                <TextView
-                    android:id="@+id/btn_music_scan"
-                    style="@style/Xz.Button.Primary"
-                    android:layout_marginTop="16dp"
-                    android:text="@string/settings_music_scan" />
-
-                <TextView
-                    android:id="@+id/music_scan_status"
-                    style="@style/Xz.Text.Hint"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/settings_music_not_configured" />
-
-                <TextView
-                    android:id="@+id/music_tracks_count"
-                    style="@style/Xz.Text.Hint"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" />
             </LinearLayout>
 
             <!-- 系统语音助手 -->

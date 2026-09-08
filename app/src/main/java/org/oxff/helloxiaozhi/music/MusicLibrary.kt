@@ -3,10 +3,13 @@ package org.oxff.helloxiaozhi.music
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import org.oxff.helloxiaozhi.data.db.MetadataSource
+import org.oxff.helloxiaozhi.data.db.MusicDatabase
+import org.oxff.helloxiaozhi.data.db.TrackMetadataCache
+import org.oxff.helloxiaozhi.music.MusicMetadataDescriptor.MetadataRule
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -20,10 +23,14 @@ import java.util.concurrent.atomic.AtomicInteger
  *  - 本地目录：通过 [File] 递归扫描
  *  - SAF 文档树：通过 [DocumentFile] 递归扫描
  *
- * 元数据缓存持久化到 `filesDir/music_cache/tracks.json`，避免每次启动全量扫描。
+ * 元数据缓存持久化到 `track_metadata_cache` 表（Room），避免每次启动全量扫描。
+ * 歌手/乐队词典存于 `artist_dict` 表，经 [ArtistDictionary] 查询。
  * 扫描在 IO 线程执行，通过回调通知完成。
  */
-open class MusicLibrary(private val context: Context) {
+open class MusicLibrary(
+    private val context: Context,
+    db: MusicDatabase,
+) {
 
     /** 扫描完成回调（主线程） */
     var onScanComplete: ((trackCount: Int) -> Unit)? = null
@@ -34,11 +41,9 @@ open class MusicLibrary(private val context: Context) {
     /** 扫描状态变更回调（主线程） */
     var onScanStateChanged: ((scanning: Boolean) -> Unit)? = null
 
-    private val gson = Gson()
-    private val cacheDir: File
-        get() = File(context.filesDir, "music_cache").apply { mkdirs() }
-    private val cacheFile: File
-        get() = File(cacheDir, "tracks.json")
+    private val artistDictionary = ArtistDictionary(db.artistDictDao())
+    private val cacheDao = db.trackMetadataCacheDao()
+    private val inferrer = MusicMetadataInferrer(artistDictionary)
 
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val scanning = AtomicBoolean(false)
@@ -52,8 +57,17 @@ open class MusicLibrary(private val context: Context) {
     /** 是否正在扫描 */
     val isScanning: Boolean get() = scanning.get()
 
-    init {
-        loadCache()
+    /** 词典仓库（供 UI 管理歌手/乐队词典） */
+    val dictionary: ArtistDictionary get() = artistDictionary
+
+    /**
+     * 启动时从 DB 缓存异步恢复内存 tracks（避免每次启动全量扫描）。
+     *
+     * 由生产调用点（XiaoZhiController 构建后）显式调用，而非放在 [init] 中——
+     * 分离副作用使单元测试可安全构造实例而不触发缓存恢复。
+     */
+    fun restoreCacheAsync() {
+        executor.execute { loadCache() }
     }
 
     // ---------------- 扫描 ----------------
@@ -97,7 +111,7 @@ open class MusicLibrary(private val context: Context) {
                 // 去重（按路径）
                 tracks = allTracks.distinctBy { it.path }
 
-                // 保存缓存
+                // 保存缓存到 DB
                 saveCache()
 
                 Log.i(TAG, "Scan complete: ${tracks.size} tracks")
@@ -114,6 +128,8 @@ open class MusicLibrary(private val context: Context) {
 
     /**
      * 扫描本地目录
+     *
+     * 同时收集各目录的 `.music_metadata.txt` 描述文件规则，供元数据推断优先命中。
      */
     private fun scanLocalDirectory(path: String): List<MusicTrack> {
         val result = mutableListOf<MusicTrack>()
@@ -123,12 +139,19 @@ open class MusicLibrary(private val context: Context) {
             return result
         }
 
+        // 重新扫描前清除该目录的旧缓存
+        cacheDao.deleteByPathPrefix(root.absolutePath)
+
+        // 收集目录树中的描述文件规则（key=目录绝对路径）
+        val descriptorRules = collectDescriptorRules(root)
+
         val files = root.walkTopDown().filter { it.isFile && isAudioFile(it.name) }.toList()
         scanTotal.addAndGet(files.size)
 
         for ((index, file) in files.withIndex()) {
             try {
-                val track = extractMetadata(file.absolutePath, MusicSource.LOCAL, file.lastModified())
+                val rules = file.parentFile?.let { descriptorRules[it.absolutePath] }
+                val track = extractMetadata(file.absolutePath, MusicSource.LOCAL, file.lastModified(), rules)
                 if (track != null) {
                     result.add(track)
                 }
@@ -141,6 +164,29 @@ open class MusicLibrary(private val context: Context) {
 
         Log.i(TAG, "Local scan: ${result.size} tracks from $path")
         return result
+    }
+
+    /**
+     * 递归收集目录树中的 `.music_metadata.txt` 描述文件规则。
+     *
+     * @return key=目录绝对路径，value=该目录的规则列表
+     */
+    private fun collectDescriptorRules(root: File): Map<String, List<MetadataRule>> {
+        val map = mutableMapOf<String, List<MetadataRule>>()
+        root.walkTopDown().filter { it.isDirectory }.forEach { dir ->
+            val descriptorFile = File(dir, MusicMetadataDescriptor.FILE_NAME)
+            if (descriptorFile.exists() && descriptorFile.isFile) {
+                try {
+                    val rules = MusicMetadataDescriptor.parse(descriptorFile.readText(Charsets.UTF_8))
+                    if (rules.isNotEmpty()) {
+                        map[dir.absolutePath] = rules
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse descriptor: ${descriptorFile.absolutePath}", e)
+                }
+            }
+        }
+        return map
     }
 
     /**
@@ -193,29 +239,40 @@ open class MusicLibrary(private val context: Context) {
     // ---------------- 元数据提取 ----------------
 
     /**
-     * 从本地文件提取元数据
+     * 从本地文件提取元数据。
+     *
+     * ID3 标签优先，缺失时由 [MusicMetadataInferrer] 从描述文件/文件夹名/文件名/词典推断补全。
      */
-    private fun extractMetadata(path: String, source: MusicSource, lastModified: Long): MusicTrack? {
+    private fun extractMetadata(
+        path: String,
+        source: MusicSource,
+        lastModified: Long,
+        descriptorRules: List<MetadataRule>?,
+    ): MusicTrack? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(path)
-            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                ?: File(path).nameWithoutExtension
-            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                ?: "未知歌手"
+            val id3Title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+            val id3Artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            val id3Album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            val id3Genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
             val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val duration = durationStr?.toLongOrNull() ?: 0L
-            val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+
+            val fileName = File(path).name
+            val inferred = inferrer.infer(path, fileName, id3Artist, id3Genre, id3Album, descriptorRules)
 
             MusicTrack(
                 id = path.hashCode().toString(),
-                title = title,
-                artist = artist,
+                title = id3Title ?: File(path).nameWithoutExtension,
+                artist = inferred.artist ?: id3Artist?.takeIf { it.isNotBlank() } ?: UNKNOWN_ARTIST,
+                album = inferred.album,
                 duration = duration,
                 path = path,
                 source = source,
-                genre = genre,
+                genre = inferred.genre,
                 lastModified = lastModified,
+                metadataSource = inferred.source,
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to extract metadata: $path", e)
@@ -226,30 +283,59 @@ open class MusicLibrary(private val context: Context) {
     }
 
     /**
-     * 从 SAF 文档提取元数据
+     * 从 SAF [DocumentFile] URI 构造用于元数据推断的路径线索。
+     *
+     * SAF URI 的目录层次被编码在 documentId 中（`%2F` 转义斜杠），
+     * 直接使用 uri.toString() 会让 [/extractParentDirName] 把 `/document/` 段误当父目录名。
+     * 这里解码出真实相对路径（`primary:free/韩宝仪1/歌曲.mp3`），
+     * 使文件夹名推断/词典匹配能正常工作；解码失败则回退到文件名。
+     */
+    private fun buildSafInferPath(uri: Uri, fallbackName: String): String {
+        // [DocumentsContract.getDocumentId] 仅接受 /document/<docId> 形式；
+        // ExternalStorageProvider 返回的是 /tree/<root>/document/<docId>（首段为 "tree"），
+        // 会抛 IllegalArgumentException，故回退取最后一个 path segment（编码的完整 docId）。
+        val rawDocId = try {
+            DocumentsContract.getDocumentId(uri)
+        } catch (e: Exception) {
+            uri.lastPathSegment
+        } ?: fallbackName
+        return Uri.decode(rawDocId).ifBlank { fallbackName }
+    }
+
+    /**
+     * 从 SAF 文档提取元数据。
+     *
+     * ID3 标签优先，缺失时由 [MusicMetadataInferrer] 从显示路径/文件名/词典推断补全。
      */
     private fun extractMetadataFromSaf(docFile: DocumentFile): MusicTrack? {
         val retriever = MediaMetadataRetriever()
         return try {
             context.contentResolver.openFileDescriptor(docFile.uri, "r")?.use { pfd ->
                 retriever.setDataSource(pfd.fileDescriptor)
-                val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                    ?: docFile.name?.substringBeforeLast('.') ?: "未知标题"
-                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                    ?: "未知歌手"
+                val id3Title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val id3Artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                val id3Album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                val id3Genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
                 val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 val duration = durationStr?.toLongOrNull() ?: 0L
-                val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+
+                val displayName = docFile.name ?: ""
+                // content:// URI 不含真实目录层级，直接推断会把 /document/ 段误当父目录名（得到 "document"）。
+                // 改用 documentId 解码出相对路径（如 "primary:free/韩宝仪1/歌曲.mp3"）作为推断线索。
+                val inferPath = buildSafInferPath(docFile.uri, displayName)
+                val inferred = inferrer.infer(inferPath, displayName, id3Artist, id3Genre, id3Album, null)
 
                 MusicTrack(
                     id = docFile.uri.toString().hashCode().toString(),
-                    title = title,
-                    artist = artist,
+                    title = id3Title ?: displayName.substringBeforeLast('.').ifEmpty { "未知标题" },
+                    artist = inferred.artist ?: id3Artist?.takeIf { it.isNotBlank() } ?: UNKNOWN_ARTIST,
+                    album = inferred.album,
                     duration = duration,
                     path = docFile.uri.toString(),
                     source = MusicSource.SAF,
-                    genre = genre,
+                    genre = inferred.genre,
                     lastModified = docFile.lastModified(),
+                    metadataSource = inferred.source,
                 )
             }
         } catch (e: Exception) {
@@ -281,9 +367,43 @@ open class MusicLibrary(private val context: Context) {
     open fun search(keyword: String): List<MusicTrack> {
         val lower = keyword.lowercase()
         return tracks.filter {
-            it.title.lowercase().contains(lower) || it.artist.lowercase().contains(lower)
+            it.title.lowercase().contains(lower) ||
+                it.artist.lowercase().contains(lower) ||
+                (it.album?.lowercase()?.contains(lower) == true)
         }
     }
+
+    /** 去重排序的歌手列表 */
+    open fun allArtists(): List<String> =
+        tracks.map { it.artist }.distinct().sorted()
+
+    /** 去重排序的类型列表 */
+    open fun allGenres(): List<String> =
+        tracks.mapNotNull { it.genre }.distinct().sorted()
+
+    /** 去重排序的专辑列表 */
+    open fun allAlbums(): List<String> =
+        tracks.mapNotNull { it.album }.distinct().sorted()
+
+    /** 按歌手筛选曲目 */
+    open fun tracksByArtist(artist: String): List<MusicTrack> {
+        val lower = artist.lowercase()
+        return tracks.filter { it.artist.lowercase().contains(lower) }
+    }
+
+    /** 按专辑搜索曲目 */
+    open fun searchByAlbum(album: String): List<MusicTrack> {
+        val lower = album.lowercase()
+        return tracks.filter { it.album?.lowercase()?.contains(lower) == true }
+    }
+
+    /** 按歌手统计曲目数 */
+    open fun artistTrackCounts(): Map<String, Int> =
+        tracks.groupingBy { it.artist }.eachCount()
+
+    /** 按类型统计曲目数 */
+    open fun genreTrackCounts(): Map<String, Int> =
+        tracks.filter { it.genre != null }.groupingBy { it.genre!! }.eachCount()
 
     /** 随机返回一首 */
     open fun randomTrack(): MusicTrack? = tracks.randomOrNull()
@@ -301,33 +421,27 @@ open class MusicLibrary(private val context: Context) {
     // ---------------- 缓存 ----------------
 
     /**
-     * 加载缓存
+     * 启动时从 DB 缓存恢复内存 tracks（避免每次启动全量扫描）。
+     * 在 executor（IO 线程）中执行。
      */
     private fun loadCache() {
-        if (!cacheFile.exists()) {
-            Log.i(TAG, "No cache file found")
-            return
-        }
         try {
-            val json = cacheFile.readText()
-            val type = object : TypeToken<List<MusicTrack>>() {}.type
-            val cached: List<MusicTrack> = gson.fromJson(json, type) ?: emptyList()
-            tracks = cached
+            val cached = cacheDao.all()
+            tracks = cached.map { it.toMusicTrack() }
             Log.i(TAG, "Loaded ${cached.size} tracks from cache")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load cache", e)
-            cacheFile.delete()
         }
     }
 
     /**
-     * 保存缓存
+     * 扫描完成后批量写入 DB 缓存（单事务）
      */
     private fun saveCache() {
         try {
-            val json = gson.toJson(tracks)
-            cacheFile.writeText(json)
-            Log.i(TAG, "Saved ${tracks.size} tracks to cache")
+            val entries = tracks.map { it.toCacheEntry() }
+            cacheDao.upsertAll(entries)
+            Log.i(TAG, "Saved ${entries.size} tracks to cache")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save cache", e)
         }
@@ -338,9 +452,40 @@ open class MusicLibrary(private val context: Context) {
      */
     fun clearCache() {
         tracks = emptyList()
-        cacheFile.delete()
+        try {
+            cacheDao.clearAll()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear cache", e)
+        }
         Log.i(TAG, "Cache cleared")
     }
+
+    // ---------------- 实体映射 ----------------
+
+    private fun TrackMetadataCache.toMusicTrack(): MusicTrack = MusicTrack(
+        id = trackId,
+        title = title,
+        artist = artist,
+        album = album,
+        duration = duration,
+        path = path,
+        source = if (path.startsWith("content://")) MusicSource.SAF else MusicSource.LOCAL,
+        genre = genre,
+        lastModified = lastModified,
+        metadataSource = metadataSource,
+    )
+
+    private fun MusicTrack.toCacheEntry(): TrackMetadataCache = TrackMetadataCache(
+        trackId = id,
+        title = title,
+        artist = artist,
+        album = album,
+        genre = genre,
+        duration = duration,
+        path = path,
+        lastModified = lastModified,
+        metadataSource = metadataSource,
+    )
 
     // ---------------- 工具方法 ----------------
 
@@ -381,6 +526,9 @@ open class MusicLibrary(private val context: Context) {
 
     companion object {
         private const val TAG = "MusicLibrary"
+
+        /** 歌手缺失时的兜底占位符 */
+        const val UNKNOWN_ARTIST = "未知歌手"
 
         /** 支持的音频文件扩展名 */
         private val AUDIO_EXTENSIONS = listOf(

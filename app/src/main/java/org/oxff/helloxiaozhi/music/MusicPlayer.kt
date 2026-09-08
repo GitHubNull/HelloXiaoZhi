@@ -74,7 +74,7 @@ open class MusicPlayer(private val context: Context) {
     /**
      * 播放曲目列表（从指定索引开始）
      */
-    fun playPlaylist(tracks: List<MusicTrack>, startIndex: Int = 0) {
+    open fun playPlaylist(tracks: List<MusicTrack>, startIndex: Int = 0) {
         if (tracks.isEmpty()) {
             Log.w(TAG, "playPlaylist: empty list")
             return

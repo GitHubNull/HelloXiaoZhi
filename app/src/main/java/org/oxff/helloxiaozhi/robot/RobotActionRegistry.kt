@@ -4,6 +4,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import org.oxff.helloxiaozhi.music.MusicLibrary
 import org.oxff.helloxiaozhi.music.MusicPlayer
+import org.oxff.helloxiaozhi.music.MusicTrack
 
 /**
  * 动作注册表：集中管理所有可用的机器人动作工具。
@@ -66,7 +67,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.nodHead(speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -80,7 +81,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.shakeHead(speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -94,7 +95,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(20f, speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -108,7 +109,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(-20f, speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -122,7 +123,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(-20f, speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -136,7 +137,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(20f, speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -150,7 +151,7 @@ class RobotActionRegistry(
             executor = { params ->
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(0f, speed)
-                true
+                OK_RESULT
             },
         ))
 
@@ -164,10 +165,10 @@ class RobotActionRegistry(
             ),
             executor = { params ->
                 val angle = (params["angle"] as? Number)?.toFloat()
-                    ?: return@RobotAction false
+                    ?: return@RobotAction null
                 val speed = (params["speed"] as? Number)?.toInt() ?: 50
                 executor.rotateHead(angle, speed)
-                true
+                OK_RESULT
             },
         ))
     }
@@ -187,7 +188,7 @@ class RobotActionRegistry(
                 val speed = (params["speed"] as? Number)?.toFloat() ?: 0.3f
                 val duration = (params["duration"] as? Number)?.toLong() ?: 1000L
                 executor.moveForward(speed, duration)
-                true
+                OK_RESULT
             },
         ))
 
@@ -203,7 +204,7 @@ class RobotActionRegistry(
                 val speed = (params["speed"] as? Number)?.toFloat() ?: 0.3f
                 val duration = (params["duration"] as? Number)?.toLong() ?: 1000L
                 executor.moveBackward(speed, duration)
-                true
+                OK_RESULT
             },
         ))
 
@@ -219,7 +220,7 @@ class RobotActionRegistry(
                 val angle = (params["angle"] as? Number)?.toFloat() ?: 90f
                 val speed = (params["speed"] as? Number)?.toFloat() ?: 30f
                 executor.turnLeft(speed, angle)
-                true
+                OK_RESULT
             },
         ))
 
@@ -235,7 +236,7 @@ class RobotActionRegistry(
                 val angle = (params["angle"] as? Number)?.toFloat() ?: 90f
                 val speed = (params["speed"] as? Number)?.toFloat() ?: 30f
                 executor.turnRight(speed, angle)
-                true
+                OK_RESULT
             },
         ))
 
@@ -245,7 +246,7 @@ class RobotActionRegistry(
             category = Category.MOTION,
             executor = {
                 executor.stopMoving()
-                true
+                OK_RESULT
             },
         ))
     }
@@ -269,11 +270,11 @@ class RobotActionRegistry(
                 ActionParam("loops", "integer", "循环次数", default = 1, minimum = 1, maximum = 10),
             ),
             executor = { params ->
-                val name = params["name"] as? String ?: return@RobotAction false
+                val name = params["name"] as? String ?: return@RobotAction null
                 val speaking = params["speaking"] as? Boolean ?: false
                 val loops = (params["loops"] as? Number)?.toInt() ?: 1
                 executor.showEmotion(name, speaking, loops)
-                true
+                OK_RESULT
             },
         ))
 
@@ -283,7 +284,7 @@ class RobotActionRegistry(
             category = Category.EMOTION,
             executor = {
                 executor.dismissEmotion()
-                true
+                OK_RESULT
             },
         ))
     }
@@ -297,7 +298,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressAgreement()
-                true
+                OK_RESULT
             },
         ))
 
@@ -307,7 +308,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressDisagreement()
-                true
+                OK_RESULT
             },
         ))
 
@@ -317,7 +318,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressCuriosity()
-                true
+                OK_RESULT
             },
         ))
 
@@ -327,7 +328,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressExcitement()
-                true
+                OK_RESULT
             },
         ))
 
@@ -337,7 +338,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressLove()
-                true
+                OK_RESULT
             },
         ))
 
@@ -347,7 +348,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressShyness()
-                true
+                OK_RESULT
             },
         ))
 
@@ -357,7 +358,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.expressSurprise()
-                true
+                OK_RESULT
             },
         ))
 
@@ -367,7 +368,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.waveHello()
-                true
+                OK_RESULT
             },
         ))
 
@@ -377,7 +378,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.dance()
-                true
+                OK_RESULT
             },
         ))
 
@@ -387,7 +388,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.think()
-                true
+                OK_RESULT
             },
         ))
 
@@ -397,7 +398,7 @@ class RobotActionRegistry(
             category = Category.COMBO,
             executor = {
                 executor.resetToDefault()
-                true
+                OK_RESULT
             },
         ))
     }
@@ -410,40 +411,37 @@ class RobotActionRegistry(
 
         register(RobotAction(
             name = "self.music.play",
-            description = "播放音乐。可通过 track 指定曲名或歌手，通过 genre 指定类型，或设置 random 为 true 随机播放",
+            description = "播放音乐。可通过 track 指定曲名，artist 指定歌手，album 指定专辑，genre 指定类型，或设置 random 为 true 随机播放",
             category = Category.MUSIC,
             params = listOf(
-                ActionParam("track", "string", "曲名或歌手关键词"),
+                ActionParam("track", "string", "曲名关键词"),
+                ActionParam("artist", "string", "歌手名（播放该歌手随机一首）"),
+                ActionParam("album", "string", "专辑名（播放该专辑随机一首）"),
                 ActionParam("genre", "string", "音乐类型（如：轻音乐、摇滚、流行、古典、爵士）"),
                 ActionParam("random", "boolean", "是否随机播放", default = false),
             ),
             executor = { params ->
                 val trackKeyword = params["track"] as? String
+                val artistKeyword = params["artist"] as? String
+                val albumKeyword = params["album"] as? String
                 val genre = params["genre"] as? String
                 val random = params["random"] as? Boolean ?: false
 
                 val track = when {
-                    !trackKeyword.isNullOrEmpty() -> {
-                        // 按关键词搜索（标题或歌手）
-                        library.search(trackKeyword).firstOrNull()
-                    }
-                    !genre.isNullOrEmpty() -> {
-                        // 按类型随机
-                        library.randomByGenre(genre)
-                    }
-                    random -> {
-                        // 随机播放
-                        library.randomTrack()
-                    }
+                    !trackKeyword.isNullOrEmpty() -> library.search(trackKeyword).firstOrNull()
+                    !albumKeyword.isNullOrEmpty() -> library.searchByAlbum(albumKeyword).randomOrNull()
+                    !artistKeyword.isNullOrEmpty() -> library.tracksByArtist(artistKeyword).randomOrNull()
+                    !genre.isNullOrEmpty() -> library.randomByGenre(genre)
+                    random -> library.randomTrack()
                     else -> null
                 }
 
                 if (track != null) {
                     player.play(track)
-                    true
+                    buildPlayingJson(track)
                 } else {
-                    logWarn("No track found for play: track=$trackKeyword, genre=$genre, random=$random")
-                    false
+                    logWarn("No track found for play: track=$trackKeyword, artist=$artistKeyword, album=$albumKeyword, genre=$genre, random=$random")
+                    null
                 }
             },
         ))
@@ -454,7 +452,7 @@ class RobotActionRegistry(
             category = Category.MUSIC,
             executor = {
                 player.pause()
-                true
+                OK_RESULT
             },
         ))
 
@@ -464,7 +462,7 @@ class RobotActionRegistry(
             category = Category.MUSIC,
             executor = {
                 player.resume()
-                true
+                OK_RESULT
             },
         ))
 
@@ -474,7 +472,7 @@ class RobotActionRegistry(
             category = Category.MUSIC,
             executor = {
                 player.stop()
-                true
+                OK_RESULT
             },
         ))
 
@@ -483,7 +481,7 @@ class RobotActionRegistry(
             description = "播放下一首",
             category = Category.MUSIC,
             executor = {
-                player.next()
+                if (player.next()) OK_RESULT else null
             },
         ))
 
@@ -492,21 +490,128 @@ class RobotActionRegistry(
             description = "播放上一首",
             category = Category.MUSIC,
             executor = {
-                player.previous()
+                if (player.previous()) OK_RESULT else null
             },
         ))
 
         register(RobotAction(
             name = "self.music.list",
-            description = "列出当前音乐库中的所有曲目",
+            description = "分页列出当前音乐库中的曲目（含标题/歌手/专辑/类型/时长）",
             category = Category.MUSIC,
-            executor = {
-                // 返回曲目列表信息（通过日志输出，实际结果由 MCP 响应携带）
-                val tracks = library.allTracks()
-                logWarn("Music library: ${tracks.size} tracks")
-                true
+            params = listOf(
+                ActionParam("limit", "integer", "每页返回条数", default = 50, minimum = 1, maximum = 200),
+                ActionParam("offset", "integer", "起始偏移", default = 0, minimum = 0),
+            ),
+            executor = { params ->
+                val limit = (params["limit"] as? Number)?.toInt() ?: 50
+                val offset = (params["offset"] as? Number)?.toInt() ?: 0
+                val all = library.allTracks()
+                buildTracksJson(all.drop(offset).take(limit))
             },
         ))
+
+        register(RobotAction(
+            name = "self.music.search",
+            description = "按关键词模糊搜索曲目（匹配标题/歌手/专辑）",
+            category = Category.MUSIC,
+            params = listOf(
+                ActionParam("keyword", "string", "搜索关键词", required = true),
+            ),
+            executor = { params ->
+                val keyword = params["keyword"] as? String ?: return@RobotAction null
+                buildTracksJson(library.search(keyword))
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.artists",
+            description = "列出音乐库中所有歌手及各自曲目数",
+            category = Category.MUSIC,
+            executor = {
+                buildCountListJson("artists", "artist", library.artistTrackCounts())
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.genres",
+            description = "列出音乐库中所有音乐类型及各自曲目数",
+            category = Category.MUSIC,
+            executor = {
+                buildCountListJson("genres", "genre", library.genreTrackCounts())
+            },
+        ))
+
+        register(RobotAction(
+            name = "self.music.albums",
+            description = "列出音乐库中的专辑，可通过 artist 参数按歌手筛选",
+            category = Category.MUSIC,
+            params = listOf(
+                ActionParam("artist", "string", "歌手名（可选，按歌手筛选专辑）"),
+            ),
+            executor = { params ->
+                val artist = params["artist"] as? String
+                val albums = if (artist.isNullOrEmpty()) {
+                    library.allAlbums()
+                } else {
+                    library.tracksByArtist(artist).mapNotNull { it.album }.distinct().sorted()
+                }
+                val result = JsonObject()
+                result.addProperty("count", albums.size)
+                val arr = JsonArray()
+                albums.forEach { arr.add(it) }
+                result.add("albums", arr)
+                result.toString()
+            },
+        ))
+    }
+
+    // ---------------- JSON 构建辅助 ----------------
+
+    /** 播放成功响应 */
+    private fun buildPlayingJson(track: MusicTrack): String {
+        val obj = JsonObject()
+        obj.addProperty("result", "playing")
+        obj.addProperty("track", track.title)
+        obj.addProperty("artist", track.artist)
+        track.album?.let { obj.addProperty("album", it) }
+        track.genre?.let { obj.addProperty("genre", it) }
+        return obj.toString()
+    }
+
+    /** 单条曲目 JSON */
+    private fun buildTrackJson(track: MusicTrack): JsonObject {
+        val obj = JsonObject()
+        obj.addProperty("title", track.title)
+        obj.addProperty("artist", track.artist)
+        track.album?.let { obj.addProperty("album", it) }
+        track.genre?.let { obj.addProperty("genre", it) }
+        obj.addProperty("duration", track.duration)
+        return obj
+    }
+
+    /** 曲目列表 JSON */
+    private fun buildTracksJson(tracks: List<MusicTrack>): String {
+        val result = JsonObject()
+        result.addProperty("count", tracks.size)
+        val arr = JsonArray()
+        tracks.forEach { arr.add(buildTrackJson(it)) }
+        result.add("tracks", arr)
+        return result.toString()
+    }
+
+    /** 计数列表 JSON（歌手/类型共用） */
+    private fun buildCountListJson(listKey: String, itemKey: String, counts: Map<String, Int>): String {
+        val result = JsonObject()
+        result.addProperty("count", counts.size)
+        val arr = JsonArray()
+        counts.toSortedMap().forEach { (name, n) ->
+            val o = JsonObject()
+            o.addProperty(itemKey, name)
+            o.addProperty("tracks", n)
+            arr.add(o)
+        }
+        result.add(listKey, arr)
+        return result.toString()
     }
 
     // ---------------- 查询与执行 ----------------
@@ -521,18 +626,18 @@ class RobotActionRegistry(
      * 执行指定动作
      * @param name 动作名称
      * @param arguments 参数 map
-     * @return 是否成功执行
+     * @return JSON 字符串作为 MCP text content；null 表示执行失败
      */
-    fun execute(name: String, arguments: Map<String, Any?>): Boolean {
+    fun execute(name: String, arguments: Map<String, Any?>): String? {
         val action = actionMap[name] ?: run {
             logWarn("Unknown action: $name")
-            return false
+            return null
         }
         return try {
             action.executor(arguments)
         } catch (e: Exception) {
             logError("Failed to execute action: $name", e)
-            false
+            null
         }
     }
 
@@ -597,5 +702,7 @@ class RobotActionRegistry(
     }
 
     companion object {
+        /** 动作类工具成功时的统一 JSON 响应 */
+        private const val OK_RESULT = "{\"result\":\"ok\"}"
     }
 }

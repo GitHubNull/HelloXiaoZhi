@@ -135,6 +135,31 @@
     <string name="toast_music_enabled">音乐播放已开启</string>
     <string name="toast_music_disabled">音乐播放已关闭</string>
     <string name="toast_music_scan_started">开始扫描音乐库</string>
+
+    <!-- ============ 音乐配置页（独立 Activity） ============ -->
+    <string name="music_settings_back">返回</string>
+    <string name="music_settings_title">音乐设置</string>
+    <string name="settings_music_entry">音乐设置</string>
+    <string name="settings_music_entry_hint">音乐开关、目录、扫描与歌手词典</string>
+
+    <!-- 歌手词典管理 -->
+    <string name="music_dict_title">歌手词典</string>
+    <string name="music_dict_builtin_count">内置条目加载中…</string>
+    <string name="music_dict_builtin_count_value">内置 %1$d 条（歌手 / 乐队 / 别名），不可删除</string>
+    <string name="music_dict_user_section">我导入的条目</string>
+    <string name="music_dict_user_empty">尚未导入，点击下方按钮导入歌手 / 乐队名单</string>
+    <string name="music_dict_import_artist">导入歌手文件</string>
+    <string name="music_dict_import_band">导入乐队文件</string>
+    <string name="music_dict_export">导出我的条目</string>
+    <string name="music_dict_import_hint">文本文件（UTF-8），每行一个名字，空行与 # 开头行忽略，重复自动跳过</string>
+    <string name="music_dict_delete">删除</string>
+    <string name="music_dict_type_artist">歌手</string>
+    <string name="music_dict_type_band">乐队</string>
+    <string name="music_dict_import_result">导入 %1$d 条，跳过 %2$d 条重复</string>
+    <string name="music_dict_import_failed">导入失败，请确认文件为 UTF-8 文本</string>
+    <string name="music_dict_export_done">导出完成</string>
+    <string name="music_dict_export_failed">导出失败</string>
+    <string name="music_dict_deleted">已删除</string>
     <string name="settings_group_device">设备信息</string>
     <string name="settings_device_id">设备 ID</string>
     <string name="settings_device_id_hint">本机物理 MAC，作为默认机器人的身份与新建机器人的初始值</string>

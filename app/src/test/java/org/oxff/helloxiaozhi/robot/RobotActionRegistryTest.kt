@@ -1,5 +1,6 @@
 package org.oxff.helloxiaozhi.robot
 
+import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -93,48 +94,57 @@ class RobotActionRegistryTest {
     @Test
     fun `执行点头动作`() {
         val (registry, executor) = newRegistry()
-        assertTrue(registry.execute("self.robot.nod", emptyMap()))
+        assertNotNull(registry.execute("self.robot.nod", emptyMap()))
         assertTrue(executor.calls.any { it.startsWith("nodHead") })
     }
 
     @Test
     fun `执行移动动作带参数`() {
         val (registry, executor) = newRegistry()
-        assertTrue(registry.execute("self.robot.move_forward", mapOf("speed" to 0.5, "duration" to 2000)))
+        assertNotNull(registry.execute("self.robot.move_forward", mapOf("speed" to 0.5, "duration" to 2000)))
         assertTrue(executor.calls.any { it.contains("moveForward") && it.contains("0.5") })
     }
 
     @Test
     fun `执行转向动作带参数`() {
         val (registry, executor) = newRegistry()
-        assertTrue(registry.execute("self.robot.turn_left", mapOf("angle" to 45, "speed" to 20)))
+        assertNotNull(registry.execute("self.robot.turn_left", mapOf("angle" to 45, "speed" to 20)))
         assertTrue(executor.calls.any { it.contains("turnLeft") })
     }
 
     @Test
     fun `执行表情动作`() {
         val (registry, executor) = newRegistry()
-        assertTrue(registry.execute("self.robot.show_emotion", mapOf("name" to "happy", "speaking" to true)))
+        assertNotNull(registry.execute("self.robot.show_emotion", mapOf("name" to "happy", "speaking" to true)))
         assertTrue(executor.calls.any { it.contains("showEmotion") && it.contains("happy") })
     }
 
     @Test
     fun `执行组合动作`() {
         val (registry, executor) = newRegistry()
-        assertTrue(registry.execute("self.robot.dance", emptyMap()))
+        assertNotNull(registry.execute("self.robot.dance", emptyMap()))
         assertTrue(executor.calls.contains("dance"))
     }
 
     @Test
-    fun `执行未知动作返回 false`() {
+    fun `执行动作成功返回 ok JSON`() {
         val (registry, _) = newRegistry()
-        assertFalse(registry.execute("self.robot.nonexistent", emptyMap()))
+        val result = registry.execute("self.robot.nod", emptyMap())
+        assertNotNull(result)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals("ok", parsed.get("result").asString)
     }
 
     @Test
-    fun `执行头部旋转缺少必填参数返回 false`() {
+    fun `执行未知动作返回 null`() {
         val (registry, _) = newRegistry()
-        assertFalse(registry.execute("self.robot.head_rotate", emptyMap()))
+        assertNull(registry.execute("self.robot.nonexistent", emptyMap()))
+    }
+
+    @Test
+    fun `执行头部旋转缺少必填参数返回 null`() {
+        val (registry, _) = newRegistry()
+        assertNull(registry.execute("self.robot.head_rotate", emptyMap()))
     }
 
     // ---------------- tools/list JSON ----------------
@@ -208,35 +218,35 @@ class RobotActionRegistryTest {
     @Test
     fun `执行音乐播放动作`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
-        assertTrue(registry.execute("self.music.play", mapOf("track" to "晴天")))
+        assertNotNull(registry.execute("self.music.play", mapOf("track" to "晴天")))
         assertTrue(musicPlayer.playCalled)
     }
 
     @Test
     fun `执行音乐暂停动作`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
-        assertTrue(registry.execute("self.music.pause", emptyMap()))
+        assertNotNull(registry.execute("self.music.pause", emptyMap()))
         assertTrue(musicPlayer.pauseCalled)
     }
 
     @Test
     fun `执行音乐停止动作`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
-        assertTrue(registry.execute("self.music.stop", emptyMap()))
+        assertNotNull(registry.execute("self.music.stop", emptyMap()))
         assertTrue(musicPlayer.stopCalled)
     }
 
     @Test
     fun `执行音乐下一首动作`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
-        assertTrue(registry.execute("self.music.next", emptyMap()))
+        assertNotNull(registry.execute("self.music.next", emptyMap()))
         assertTrue(musicPlayer.nextCalled)
     }
 
     @Test
     fun `执行音乐上一首动作`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
-        assertTrue(registry.execute("self.music.previous", emptyMap()))
+        assertNotNull(registry.execute("self.music.previous", emptyMap()))
         assertTrue(musicPlayer.previousCalled)
     }
 
@@ -251,6 +261,87 @@ class RobotActionRegistryTest {
         assertTrue(props.has("track"))
         assertTrue(props.has("genre"))
         assertTrue(props.has("random"))
+        assertTrue(props.has("artist"))
+        assertTrue(props.has("album"))
+    }
+
+    @Test
+    fun `按名称查找音乐查询工具`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        assertNotNull(registry.findAction("self.music.list"))
+        assertNotNull(registry.findAction("self.music.search"))
+        assertNotNull(registry.findAction("self.music.artists"))
+        assertNotNull(registry.findAction("self.music.genres"))
+        assertNotNull(registry.findAction("self.music.albums"))
+    }
+
+    @Test
+    fun `音乐列表工具返回曲目 JSON`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val result = registry.execute("self.music.list", emptyMap())
+        assertNotNull(result)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals(1, parsed.get("count").asInt)
+        val first = parsed.getAsJsonArray("tracks")[0].asJsonObject
+        assertEquals("晴天", first.get("title").asString)
+        assertEquals("周杰伦", first.get("artist").asString)
+        assertEquals("范特西", first.get("album").asString)
+    }
+
+    @Test
+    fun `音乐搜索工具返回匹配曲目 JSON`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val result = registry.execute("self.music.search", mapOf("keyword" to "晴天"))
+        assertNotNull(result)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals(1, parsed.get("count").asInt)
+    }
+
+    @Test
+    fun `音乐搜索工具缺少关键词返回 null`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        assertNull(registry.execute("self.music.search", emptyMap()))
+    }
+
+    @Test
+    fun `音乐歌手工具返回统计 JSON`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val result = registry.execute("self.music.artists", emptyMap())
+        assertNotNull(result)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals(1, parsed.get("count").asInt)
+        val first = parsed.getAsJsonArray("artists")[0].asJsonObject
+        assertEquals("周杰伦", first.get("artist").asString)
+        assertEquals(1, first.get("tracks").asInt)
+    }
+
+    @Test
+    fun `音乐专辑工具按歌手筛选`() {
+        val (registry, _, _) = newRegistryWithMusic()
+        val result = registry.execute("self.music.albums", mapOf("artist" to "周杰伦"))
+        assertNotNull(result)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals(1, parsed.get("count").asInt)
+        assertEquals("范特西", parsed.getAsJsonArray("albums")[0].asString)
+    }
+
+    @Test
+    fun `按歌手播放返回 playing JSON`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        val result = registry.execute("self.music.play", mapOf("artist" to "周杰伦"))
+        assertNotNull(result)
+        assertTrue(musicPlayer.playCalled)
+        val parsed = JsonParser.parseString(result).asJsonObject
+        assertEquals("playing", parsed.get("result").asString)
+        assertEquals("晴天", parsed.get("track").asString)
+        assertEquals("周杰伦", parsed.get("artist").asString)
+    }
+
+    @Test
+    fun `播放无匹配返回 null`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        assertNull(registry.execute("self.music.play", mapOf("track" to "不存在的歌")))
+        assertFalse(musicPlayer.playCalled)
     }
 
     // ---------------- 测试替身 ----------------
@@ -285,9 +376,21 @@ class RobotActionRegistryTest {
         }
     }
 
-    private class FakeMusicLibrary(context: android.content.Context) : MusicLibrary(context) {
+    private class FakeMusicLibrary(context: android.content.Context) : MusicLibrary(
+        context,
+        // 惰性创建内存 DB：避免 Robolectric 沙箱类加载器中重复加载 SQLite native 库
+        lazy {
+            androidx.room.Room.inMemoryDatabaseBuilder(
+                context,
+                org.oxff.helloxiaozhi.data.db.MusicDatabase::class.java,
+            ).allowMainThreadQueries().build()
+        }.value,
+    ) {
         var tracks: List<MusicTrack> = listOf(
-            MusicTrack("1", "晴天", "周杰伦", 200000, "/music/sunny.mp3", MusicSource.LOCAL),
+            MusicTrack(
+                id = "1", title = "晴天", artist = "周杰伦", album = "范特西",
+                duration = 200000, path = "/music/sunny.mp3", source = MusicSource.LOCAL,
+            ),
         )
 
         override fun allTracks(): List<MusicTrack> = tracks
@@ -302,5 +405,24 @@ class RobotActionRegistryTest {
         override fun randomTrack(): MusicTrack? = tracks.randomOrNull()
 
         override fun randomByGenre(genre: String): MusicTrack? = tracks.randomOrNull()
+
+        override fun tracksByArtist(artist: String): List<MusicTrack> {
+            val lower = artist.lowercase()
+            return tracks.filter { it.artist.lowercase().contains(lower) }
+        }
+
+        override fun searchByAlbum(album: String): List<MusicTrack> {
+            val lower = album.lowercase()
+            return tracks.filter { it.album?.lowercase()?.contains(lower) == true }
+        }
+
+        override fun allAlbums(): List<String> =
+            tracks.mapNotNull { it.album }.distinct().sorted()
+
+        override fun artistTrackCounts(): Map<String, Int> =
+            tracks.groupingBy { it.artist }.eachCount()
+
+        override fun genreTrackCounts(): Map<String, Int> =
+            tracks.filter { it.genre != null }.groupingBy { it.genre!! }.eachCount()
     }
 }

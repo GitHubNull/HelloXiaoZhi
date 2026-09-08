@@ -140,15 +140,23 @@ class XiaoZhiController(
     val robotController = VisbotRobotController(appContext)
 
     // 音乐播放模块
-    val musicLibrary = MusicLibrary(appContext)
+    private val musicDatabase = org.oxff.helloxiaozhi.data.db.MusicDatabase.getInstance(appContext)
+    val musicLibrary = MusicLibrary(appContext, musicDatabase).apply {
+        // 启动时从 DB 缓存异步恢复内存曲目
+        restoreCacheAsync()
+    }
     val musicPlayer = MusicPlayer(appContext).apply {
-        // 音乐播放时暂停 TTS，音乐停止时恢复 TTS
+        // 音乐播放时暂停 TTS 并屏蔽服务器音频，音乐停止时恢复
         onMusicStart = {
+            // 标记本地音乐播放中，AudioPipeline 将丢弃服务器下发的 TTS 音频帧，
+            // 避免服务器 AI 抢播它平台的歌与本地音乐混音
+            audioPipeline.isLocalMusicPlaying = true
             if (audioPipeline.inVoiceCall) {
                 audioPipeline.pausePlayback()
             }
         }
         onMusicStop = {
+            audioPipeline.isLocalMusicPlaying = false
             if (audioPipeline.inVoiceCall) {
                 audioPipeline.resumePlayback()
             }
@@ -237,6 +245,12 @@ class XiaoZhiController(
             Log.i(TAG, "[WS] send mcp response: ${responseJson.take(300)}")
             ws.sendText(responseJson)
         }
+        // 本地音乐指令匹配成功：发送 AbortMessage 打断服务器 TTS，
+        // 防止服务器 AI 播放自己平台的音乐与本地音乐冲突
+        messageDispatcher.onLocalMusicHandled = {
+            Log.i(TAG, "[WS] local music handled, send abort to stop server TTS")
+            ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
+        }
         messageDispatcher.onHelloReceived = { sessionId, sampleRate ->
             connectionManager.onHelloReceived(sessionId)
             audioPipeline.onHelloReceived(sampleRate)
@@ -309,6 +323,14 @@ class XiaoZhiController(
         ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
         ws.sendText(ListenMessage.stop(connectionManager.sessionId))
         audioPipeline.stopVoiceCall()
+        // 挂断时停止本地音乐播放：MusicPlayer 的 MediaPlayer 独立于 AudioPipeline 生命周期，
+        // 若用户在通话中通过语音指令播放了本地音乐，挂断后必须显式停止，否则音乐会在后台持续播放，只能杀进程终止。
+        // 顺序上先 audioPipeline.stopVoiceCall() 置 inVoiceCall=false，再停音乐：
+        // onMusicStop 回调里带的 inVoiceCall 条件会命中 false，从而跳过 resumePlayback，不会误恢复 TTS。
+        if (musicPlayer.state != org.oxff.helloxiaozhi.music.PlaybackState.IDLE) {
+            Log.i(TAG, "[WS] stopVoiceCall: stopping local music playback")
+            musicPlayer.stop()
+        }
     }
 
     fun setPlaybackGain(gain: Float) = audioPipeline.setPlaybackGain(gain)

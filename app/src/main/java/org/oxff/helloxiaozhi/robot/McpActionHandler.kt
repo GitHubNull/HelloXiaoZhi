@@ -132,20 +132,20 @@ class McpActionHandler(
 
         logInfo("Executing tool: $toolName, args: $argsMap")
 
-        val success = registry.execute(toolName, argsMap)
+        val resultJson = registry.execute(toolName, argsMap)
 
-        return if (success) {
+        return if (resultJson != null) {
             val result = JsonObject()
             val content = JsonArray()
             val textContent = JsonObject()
             textContent.addProperty("type", "text")
-            textContent.addProperty("text", "true")
+            textContent.addProperty("text", resultJson)
             content.add(textContent)
             result.add("content", content)
             result.addProperty("isError", false)
             buildSuccessResponse(id, result)
         } else {
-            buildErrorResponse(id, -32601, "Unknown tool: $toolName")
+            buildErrorResponse(id, -32601, "Tool execution failed: $toolName")
         }
     }
 

@@ -63,6 +63,13 @@ class MessageDispatcher(
     /** MCP 响应回调（需要回发给服务器的 JSON 字符串） */
     var onMcpResponse: ((String) -> Unit)? = null
 
+    /**
+     * 本地音乐指令已处理回调。
+     * 当 stt 文本被本地音乐关键词匹配成功时触发，用于通知外部发送 AbortMessage
+     * 打断服务器即将下发的 TTS，避免服务器 AI 播放自己平台的音乐与本地音乐冲突。
+     */
+    var onLocalMusicHandled: (() -> Unit)? = null
+
     /** MCP 动作处理器（由 XiaoZhiController 注入） */
     var mcpActionHandler: McpActionHandler? = null
 
@@ -114,6 +121,9 @@ class MessageDispatcher(
             // 音乐关键词匹配降级：若匹配成功则直接执行本地音乐控制，不再走服务器流程
             if (musicActionMapper?.processText(text) == true) {
                 Log.i(TAG, "[WS] stt matched music command, skip server processing")
+                // 通知外部打断服务器 TTS：服务器已收到该语音，AI 可能会播放自己平台的音乐，
+                // 需要发送 AbortMessage 阻止，避免与本地播放的音乐冲突
+                onLocalMusicHandled?.invoke()
                 return@let
             }
 

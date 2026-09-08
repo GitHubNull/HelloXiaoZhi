@@ -2,6 +2,7 @@
 <!--
   通话页尺寸·正常屏幕档（smallestScreenWidthDp >= 360dp）：
   覆盖 values/dimens.xml 中的小屏收缩值，保持设计稿 call.html 原始比例。
+  动画区贴边满屏：call_side_pad / call_pool_pad 归零，去除两侧留白。
 -->
 <resources>
     <dimen name="call_top_pad_t">10dp</dimen>
@@ -18,8 +19,8 @@
     <dimen name="call_timer_ts">13sp</dimen>
     <dimen name="call_state_ts">18sp</dimen>
     <dimen name="call_state_margin_t">8dp</dimen>
-    <dimen name="call_side_pad">14dp</dimen>
-    <dimen name="call_pool_pad">10dp</dimen>
+    <dimen name="call_side_pad">0dp</dimen>
+    <dimen name="call_pool_pad">0dp</dimen>
     <dimen name="call_bar_pad_v">14dp</dimen>
     <dimen name="call_ctrl_btn">44dp</dimen>
     <dimen name="call_ctrl_icon">18dp</dimen>

@@ -1,5 +1,6 @@
     plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -10,8 +11,8 @@ android {
         applicationId = "org.oxff.helloxiaozhi"
         minSdk = 21
         targetSdk = 27
-        versionCode = 22
-        versionName = "0.15.1"
+        versionCode = 23
+        versionName = "0.16.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -71,6 +72,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     // Visbot 机器人 SDK（rosa.jar）
     implementation(files("libs/rosa.jar"))
     // sherpa-onnx 的 JitPack AAR 会传递引入 JVM 实现 jar（sherpa-onnx-jvm），

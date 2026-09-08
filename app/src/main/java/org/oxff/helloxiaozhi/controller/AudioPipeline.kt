@@ -55,6 +55,14 @@ class AudioPipeline(
         private set
 
     /**
+     * 是否正在播放本地音乐。
+     * 本地音乐播放期间屏蔽服务器下发的 TTS 音频帧，避免服务器 AI 抢播它平台的歌
+     * 与本地音乐混音（用户"点歌却听到 AI 平台歌曲"的问题来源）。
+     */
+    @Volatile
+    var isLocalMusicPlaying = false
+
+    /**
      * 上行就绪时间戳（SystemClock.uptimeMillis）：进入通话后给 listen start
      * 一个到达服务器并激活服务器端 VAD 的缓冲窗口，窗口期内的上行帧会被丢弃。
      *
@@ -186,6 +194,11 @@ class AudioPipeline(
                 Log.i(TAG, "tts start dropped (not in voice call)")
                 return@post
             }
+            // 本地音乐播放期间屏蔽服务器 TTS，避免服务器 AI 抢播它平台的歌与本地音乐混音
+            if (isLocalMusicPlaying) {
+                Log.i(TAG, "tts start dropped (local music playing)")
+                return@post
+            }
             isAiPlaying = true
             if (stateMachine.state == ChatState.IDLE || stateMachine.state == ChatState.USER_SPEAKING) {
                 stateMachine.setState(ChatState.AI_SPEAKING)
@@ -258,6 +271,11 @@ class AudioPipeline(
         mainHandler.postDelayed({
             if (!inVoiceCall) {
                 Log.i(TAG, "audio frame dropped (not in voice call)")
+                return@postDelayed
+            }
+            // 本地音乐播放期间屏蔽服务器 TTS 音频帧，避免混音
+            if (isLocalMusicPlaying) {
+                Log.i(TAG, "audio frame dropped (local music playing)")
                 return@postDelayed
             }
             player.enqueue(pcm)

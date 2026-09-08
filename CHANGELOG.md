@@ -4,6 +4,28 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.16.0] - 2026-09-09
+
+### Added
+
+- 新增歌手/乐队词典（`data/db/` Room 持久化，`artist_dict` 表）：内置华语/日韩/欧美歌手乐队种子条目与别名（`ArtistSeedData`），支持从文本文件导入歌手/乐队名单（每行一个名字、重复自动跳过）、导出与删除用户条目；`ArtistDictionary` 提供精确 → 别名 → 忽略大小写 → 模糊的多级匹配
+- 新增音乐元数据推断器 `MusicMetadataInferrer`：ID3 标签缺失或为「未知」时，按「`.music_metadata.txt` 描述文件 → 文件路径 + 词典校验（父文件夹名/`歌手 - 歌名` 文件名模式）」推断歌手/专辑/类型；`MusicMetadataDescriptor` 解析无第三方依赖的类 YAML 目录描述文件；`MusicTrack` 新增 `album`/`metadataSource` 字段，扫描结果与推断来源入库
+- 曲目元数据缓存由 Gson JSON 文件迁移至 Room `track_metadata_cache` 表，启动时异步恢复内存曲目（`restoreCacheAsync`），扫描目录前清除对应前缀旧缓存；`AppConfig.musicCacheVersion` 默认值提升至 1
+- 音乐设置迁至独立页 `MusicSettingsActivity`（设置页新增「音乐设置」入口，原 MainActivity 内嵌目录选择与设置页内嵌控件移除）：集中管理功能开关、本地目录/SAF 文档树选择与扫描、曲目计数，以及歌手词典管理（内置条目展示/用户条目导入导出删除）
+- 语音点歌支持按专辑播放（专辑关键词提取 + `MusicLibrary.searchByAlbum`）；指令解析增强：循环剥离开头量词（一首/这首歌…）与结尾标点，再剥离「的歌/歌曲/首歌」等装饰后缀（如「播放一首韩宝仪的歌。」可正确命中歌手韩宝仪）
+- 新增单元测试：`ArtistDictionaryTest`、`MusicMetadataDescriptorTest`、`MusicMetadataInferrerTest`；扩充 `MusicActionMapperTest`、`MusicLibraryTest`、`RobotActionRegistryTest`、`McpActionHandlerTest`
+
+### Fixed
+
+- 修复语音点歌后服务器 AI 抢播它平台歌曲与本地音乐混音：本地音乐播放期间 `AudioPipeline.isLocalMusicPlaying` 丢弃服务器 `tts start` 与音频帧；`MessageDispatcher.onLocalMusicHandled` 在本地音乐指令命中时通知发送 AbortMessage 打断服务器 TTS
+- 修复语音通话挂断后本地音乐仍在后台持续播放：`XiaoZhiController.stopVoiceCall` 现先置 `inVoiceCall=false` 再显式停止本地音乐播放（避免 `onMusicStop` 误恢复 TTS）
+
+### Changed
+
+- `RobotAction.executor` 签名由 `Boolean` 改为 `String?`：执行结果以 JSON 字符串作为 MCP `text content` 回发服务器，`RobotActionRegistry` 各动作改返 `OK_RESULT`
+- 通话水波动画由圆角 + 边缘描边改为直边贴边绘制（移除 `CORNER` 圆角与 `xz_water_edge` 描边），消除小屏贴边时的四角留白
+- 构建接入 Room 2.7.2 + KSP：`libs.versions.toml` 新增 room/ksp 依赖，`gradle.properties` 增设 `android.disallowKotlinSourceSets=false` 兼容 AGP 9 内置 Kotlin
+
 ## [0.15.1] - 2026-09-08
 
 ### Fixed

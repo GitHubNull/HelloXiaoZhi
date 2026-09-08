@@ -11,8 +11,6 @@ import android.view.View
 import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.TextView
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -20,6 +18,7 @@ import org.oxff.helloxiaozhi.R
 import org.oxff.helloxiaozhi.assistant.AssistantStatusDetector
 import org.oxff.helloxiaozhi.controller.XiaoZhiController
 import org.oxff.helloxiaozhi.data.BotRepository
+import org.oxff.helloxiaozhi.ui.MusicSettingsActivity
 import org.oxff.helloxiaozhi.ui.adapter.WakeTargetAdapter
 import org.oxff.helloxiaozhi.ui.view.ToastHost
 import org.oxff.helloxiaozhi.ui.view.XzSwitch
@@ -37,8 +36,6 @@ class SettingsPageController(
     private val toast: ToastHost,
     private val onReset: () -> Unit,
     private val onGetCode: () -> Unit,
-    private val localDirLauncher: ActivityResultLauncher<Intent>,
-    private val safDirLauncher: ActivityResultLauncher<Intent>,
 ) {
 
     private val wsUrlEdit = root.findViewById<EditText>(R.id.ws_url_edit)
@@ -64,15 +61,8 @@ class SettingsPageController(
     private val robotActionSwitch = root.findViewById<XzSwitch>(R.id.robot_action_switch)
     private val robotStatusText = root.findViewById<TextView>(R.id.robot_status_text)
 
-    // 音乐播放设置
-    private val musicSwitch = root.findViewById<XzSwitch>(R.id.music_switch)
-    private val musicLocalPathText = root.findViewById<TextView>(R.id.music_local_path_text)
-    private val btnMusicLocalSelect = root.findViewById<TextView>(R.id.btn_music_local_select)
-    private val musicSafUriText = root.findViewById<TextView>(R.id.music_saf_uri_text)
-    private val btnMusicSafSelect = root.findViewById<TextView>(R.id.btn_music_saf_select)
-    private val btnMusicScan = root.findViewById<TextView>(R.id.btn_music_scan)
-    private val musicScanStatus = root.findViewById<TextView>(R.id.music_scan_status)
-    private val musicTracksCount = root.findViewById<TextView>(R.id.music_tracks_count)
+    // 音乐设置入口（跳转独立音乐配置页）
+    private val btnMusicSettingsEntry = root.findViewById<View>(R.id.btn_music_settings_entry)
 
     private val wakeAdapter = WakeTargetAdapter(onSelect = { bot ->
         repository.wakeTargetBotId = bot.id
@@ -143,49 +133,9 @@ class SettingsPageController(
             controller.actionMapper.enabled = checked
         }
 
-        // 音乐功能开关
-        musicSwitch.onCheckedChange = { checked ->
-            controller.config.musicEnabled = checked
-            controller.musicActionMapper.enabled = checked
-            toast.show(
-                root.context.getString(if (checked) R.string.toast_music_enabled else R.string.toast_music_disabled),
-                ToastHost.Kind.SUCCESS,
-            )
-        }
-
-        // 本地音乐目录选择
-        btnMusicLocalSelect.setOnClickListener {
-            localDirLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
-        }
-
-        // SAF 目录选择
-        btnMusicSafSelect.setOnClickListener {
-            safDirLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
-        }
-
-        // 扫描音乐库
-        btnMusicScan.setOnClickListener {
-            val localPath = controller.config.musicLocalPath
-            val safUri = controller.config.musicSafUri
-            if (localPath.isEmpty() && safUri.isEmpty()) {
-                toast.show(root.context.getString(R.string.settings_music_not_configured), ToastHost.Kind.ERROR)
-                return@setOnClickListener
-            }
-            toast.show(root.context.getString(R.string.toast_music_scan_started), ToastHost.Kind.SUCCESS)
-            controller.musicLibrary.scan(localPath, safUri)
-        }
-
-        // 音乐库扫描回调
-        controller.musicLibrary.onScanStateChanged = { scanning ->
-            musicScanStatus.text = if (scanning) {
-                root.context.getString(R.string.settings_music_scanning)
-            } else {
-                root.context.getString(R.string.settings_music_not_configured)
-            }
-        }
-        controller.musicLibrary.onScanComplete = { count ->
-            musicScanStatus.text = root.context.getString(R.string.settings_music_scan_complete, count)
-            updateMusicTracksCount()
+        // 音乐设置入口：跳转独立音乐配置页
+        btnMusicSettingsEntry.setOnClickListener {
+            root.context.startActivity(Intent(root.context, MusicSettingsActivity::class.java))
         }
 
         // 系统语音助手
@@ -219,11 +169,9 @@ class SettingsPageController(
         wakeSoundSwitch.setChecked(controller.config.wakeSoundEnabled, animate = false)
         aiDoneSoundSwitch.setChecked(controller.config.aiDoneSoundEnabled, animate = false)
         robotActionSwitch.setChecked(controller.config.robotActionEnabled, animate = false)
-        musicSwitch.setChecked(controller.config.musicEnabled, animate = false)
         updateWakeStatus()
         updateAssistantStatus()
         updateRobotStatus()
-        updateMusicSettings()
     }
 
     private fun renderWakeTargets() {
@@ -299,22 +247,6 @@ class SettingsPageController(
         } else {
             context.getString(R.string.settings_robot_status_unavailable)
         }
-    }
-
-    private fun updateMusicSettings() {
-        val context = root.context
-        val localPath = controller.config.musicLocalPath
-        val safUri = controller.config.musicSafUri
-
-        musicLocalPathText.text = if (localPath.isNotEmpty()) localPath else context.getString(R.string.settings_music_not_configured)
-        musicSafUriText.text = if (safUri.isNotEmpty()) safUri else context.getString(R.string.settings_music_not_configured)
-
-        updateMusicTracksCount()
-    }
-
-    private fun updateMusicTracksCount() {
-        val count = controller.musicLibrary.trackCount()
-        musicTracksCount.text = root.context.getString(R.string.settings_music_tracks_count, count)
     }
 
     private fun updateAssistantStatus() {

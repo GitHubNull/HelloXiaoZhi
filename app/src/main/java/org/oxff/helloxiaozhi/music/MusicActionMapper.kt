@@ -106,6 +106,24 @@ class MusicActionMapper(
                 }
             }
 
+            // 按专辑播放（需在通用播放分支之前，避免“播放XX的专辑”被当作曲名搜索）
+            containsAny(lowerText, ALBUM_KEYWORDS) -> {
+                val album = extractAlbumKeyword(text)
+                if (album != null) {
+                    Log.i(TAG, "Action: play album=$album")
+                    val tracks = musicLibrary.searchByAlbum(album)
+                    if (tracks.isNotEmpty()) {
+                        musicPlayer.playPlaylist(tracks)
+                        true
+                    } else {
+                        Log.w(TAG, "No tracks found for album: $album")
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+
             // 播放指定曲目/歌手
             containsAny(lowerText, PLAY_KEYWORDS) -> {
                 val keyword = extractPlayKeyword(text)
@@ -129,14 +147,18 @@ class MusicActionMapper(
     }
 
     /**
-     * 提取播放关键词（去除播放指令前缀）
+     * 提取播放关键词（去除播放指令前缀与后缀装饰词）。
+     *
+     * 例：
+     *  - "播放韩宝仪的歌曲" → "韩宝仪"
+     *  - "播放韩宝仪的歌"   → "韩宝仪"
+     *  - "来一首晴天"       → "晴天"
      */
     private fun extractPlayKeyword(text: String): String? {
         for (prefix in PLAY_PREFIXES) {
             if (text.startsWith(prefix)) {
                 val keyword = text.removePrefix(prefix).trim()
-                // 去除常见的后缀词
-                val cleaned = keyword.removeSuffix("的歌").removeSuffix("的歌").trim()
+                val cleaned = stripDecorations(keyword)
                 if (cleaned.isNotEmpty()) {
                     return cleaned
                 }
@@ -151,8 +173,7 @@ class MusicActionMapper(
                 // 提取"播放"后面的内容
                 val index = text.indexOf(keyword)
                 val after = text.substring(index + keyword.length).trim()
-                // 去除常见的后缀词
-                val cleaned = after.removeSuffix("的歌").removeSuffix("的歌").trim()
+                val cleaned = stripDecorations(after)
                 if (cleaned.isNotEmpty()) {
                     return cleaned
                 }
@@ -162,6 +183,79 @@ class MusicActionMapper(
             }
         }
         return null
+    }
+
+    /**
+     * 去除关键词首尾的装饰词（"的歌曲"/"的歌"/"歌曲"/"首歌" 等）与结尾标点，
+     * 避免把装饰词带进搜索导致匹配失败（如 "韩宝仪的歌曲。" 搜不到 artist=韩宝仪）。
+     *
+     * 说明：STT 识别文本末尾常带中文句号/感叹号/问号等标点，若先去标点再去装饰词，
+     * 否则 endsWith("的歌曲") 会因结尾是 "。" 而匹配失败。循环剥离直到稳定。
+     */
+    private fun stripDecorations(keyword: String): String {
+        var result = keyword.trim()
+        while (true) {
+            val before = result
+            // 先剥离开头量词（"一首"/"这首歌"/"那首歌" 等），避免 "播放一首韩宝仪的歌曲" 提取成 "一首韩宝仪"
+            result = stripLeadingQuantifier(result)
+            // 先剥离结尾标点（STT 常带中文标点）
+            result = result.trimEnd(*TRAILING_PUNCTUATION)
+            // 再剥离装饰词后缀（长的在前，优先匹配，避免 "的歌曲" 被 "的歌" 截断成 "曲"）
+            for (suffix in DECORATION_SUFFIXES) {
+                if (result.endsWith(suffix) && result.length > suffix.length) {
+                    result = result.removeSuffix(suffix).trim()
+                    break
+                }
+            }
+            if (result == before) break
+        }
+        return result
+    }
+
+    /**
+     * 剥离开头的量词/指代词前缀（长词优先，循环剥离直到稳定）。
+     *
+     * 例：
+     *  - "一首韩宝仪的歌曲" → "韩宝仪的歌曲"（再经过 [stripDecorations] 剥尾部装饰词后得 "韩宝仪"）
+     *  - "这首歌晴天"       → "晴天"
+     */
+    private fun stripLeadingQuantifier(keyword: String): String {
+        var result = keyword.trim()
+        while (true) {
+            val before = result
+            for (q in LEADING_QUANTIFIERS) {
+                if (result.startsWith(q) && result.length > q.length) {
+                    result = result.removePrefix(q).trim()
+                    break
+                }
+            }
+            if (result == before) break
+        }
+        return result
+    }
+
+    /**
+     * 提取专辑关键词（去除播放指令前缀与“的专辑/专辑”后缀）
+     */
+    private fun extractAlbumKeyword(text: String): String? {
+        val idx = text.indexOf("的专辑")
+        val cut = if (idx >= 0) idx else text.indexOf("专辑")
+        if (cut < 0) return null
+        var candidate = text.substring(0, cut).trim()
+        for (prefix in PLAY_PREFIXES) {
+            if (candidate.startsWith(prefix)) {
+                candidate = candidate.removePrefix(prefix).trim()
+                break
+            }
+        }
+        for (kw in PLAY_KEYWORDS) {
+            val i = candidate.indexOf(kw)
+            if (i >= 0) {
+                candidate = candidate.substring(i + kw.length).trim()
+                break
+            }
+        }
+        return candidate.ifEmpty { null }
     }
 
     /**
@@ -196,8 +290,33 @@ class MusicActionMapper(
         private val PREVIOUS_KEYWORDS = arrayOf("上一首", "上一曲", "前一个", "上首")
         private val RANDOM_KEYWORDS = arrayOf("随机播放", "随便放一首", "随机来一首", "随便播放")
 
+        // 专辑指令关键词
+        private val ALBUM_KEYWORDS = arrayOf("的专辑", "专辑")
+
+        // 播放关键词后缀装饰词（长的在前，优先匹配，避免截断错误）
+        private val DECORATION_SUFFIXES = arrayOf(
+            "的歌曲", "的音乐", "这首歌", "的歌儿", "的歌", "首歌", "歌曲", "音乐", "曲目", "这首",
+        )
+
+        // 开头的量词/指代词前缀（长词在前，优先匹配；STT 识别指令文本时常见，须在结尾装饰词前剔除，避免搜错）
+        private val LEADING_QUANTIFIERS = arrayOf(
+            "这一首", "那一首", "这首歌", "那首歌", "随便一首",
+            "一首歌", "来一首", "放一首", "点一首",
+            "一首", "那首", "这首", "几首",
+        )
+
+        // 结尾标点（STT 识别文本常带中文/英文句末标点，须在装饰词剥离前剔除）
+        private val TRAILING_PUNCTUATION = charArrayOf(
+            '。', '！', '？', '，', '、', '；', '：', '…',
+            '.', '!', '?', ',', ';', ':',
+            '”', '’', '"', '」', '』', '）', '）', '|', '~', '～',
+        )
+
         // 音乐类型关键词
-        private val GENRE_KEYWORDS = arrayOf("轻音乐", "摇滚", "流行", "古典", "爵士", "民谣", "电子", "说唱")
+        private val GENRE_KEYWORDS = arrayOf(
+            "轻音乐", "摇滚", "流行", "古典", "爵士", "民谣", "电子", "说唱",
+            "纯音乐", "钢琴曲", "古风", "儿歌", "英文歌",
+        )
         private val GENRE_MAP = mapOf(
             "轻音乐" to "轻音乐",
             "摇滚" to "摇滚",
@@ -207,6 +326,11 @@ class MusicActionMapper(
             "民谣" to "民谣",
             "电子" to "电子",
             "说唱" to "说唱",
+            "纯音乐" to "轻音乐",
+            "钢琴曲" to "轻音乐",
+            "古风" to "古风",
+            "儿歌" to "儿歌",
+            "英文歌" to "英文歌",
         )
     }
 }

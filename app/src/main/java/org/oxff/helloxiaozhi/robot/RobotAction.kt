@@ -32,8 +32,8 @@ data class RobotAction(
     val category: Category,
     /** 参数列表 */
     val params: List<ActionParam> = emptyList(),
-    /** 执行器：接收参数 map，返回是否成功 */
-    val executor: (Map<String, Any?>) -> Boolean,
+    /** 执行器：接收参数 map，返回 JSON 字符串作为 MCP text content；null 表示执行失败 */
+    val executor: (Map<String, Any?>) -> String?,
 )
 
 /** 动作分类 */

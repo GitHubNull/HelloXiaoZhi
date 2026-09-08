@@ -141,6 +141,23 @@ class McpActionHandlerTest {
     }
 
     @Test
+    fun `tools call 返回结构化 text content`() {
+        val (handler, _) = newHandler()
+        val params = JsonObject()
+        params.addProperty("name", "self.robot.nod")
+        val response = handler.handleMcpMessage(buildPayload("tools/call", id = 9, params = params))
+
+        assertNotNull(response)
+        val result = response!!.getAsJsonObject("result")
+        val content = result.getAsJsonArray("content")
+        assertTrue(content.size() > 0)
+        val text = content[0].asJsonObject.get("text").asString
+        // 动作类工具成功时返回统一 JSON
+        val parsed = JsonParser.parseString(text).asJsonObject
+        assertEquals("ok", parsed.get("result").asString)
+    }
+
+    @Test
     fun `tools call 未知工具返回错误`() {
         val (handler, _) = newHandler()
         val params = JsonObject()
@@ -151,7 +168,7 @@ class McpActionHandlerTest {
         val error = response!!.getAsJsonObject("error")
         assertNotNull(error)
         assertEquals(-32601, error.get("code").asInt)
-        assertTrue(error.get("message").asString.contains("Unknown tool"))
+        assertTrue(error.get("message").asString.contains("Tool execution failed"))
     }
 
     @Test

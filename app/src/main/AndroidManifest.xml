@@ -44,6 +44,12 @@
             android:screenOrientation="behind"
             android:theme="@style/Theme.HelloXiaoZhi.VoiceCall" />
 
+        <activity
+            android:name=".ui.MusicSettingsActivity"
+            android:exported="false"
+            android:label="@string/music_settings_title"
+            android:screenOrientation="behind" />
+
         <!-- 常驻唤醒词检测前台服务 -->
         <service
             android:name=".wake.WakeWordService"

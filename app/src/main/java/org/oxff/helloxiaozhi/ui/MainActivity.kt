@@ -58,23 +58,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var tabManager: TabManager
 
-    // SAF 目录选择 launcher（音乐设置）
-    private val localDirLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        result.data?.data?.let { uri ->
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            controller.config.musicLocalPath = uri.toString()
-            settingsPage.render()
-        }
-    }
-
-    private val safDirLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        result.data?.data?.let { uri ->
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            controller.config.musicSafUri = uri.toString()
-            settingsPage.render()
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         // 原生横屏小面板（脸屏类真机）显式请求横屏，避开厂商 ROM 强开传感器旋转
         OrientationPolicy.lockIfNeeded(this)
@@ -180,8 +163,6 @@ class MainActivity : AppCompatActivity() {
             toast = toastHost,
             onReset = { confirmReset() },
             onGetCode = { controller.ensureConnected() },
-            localDirLauncher = localDirLauncher,
-            safDirLauncher = safDirLauncher,
         )
         chatDetail = ChatDetailController(
             container = chatDetailContainer,
