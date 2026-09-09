@@ -190,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     private fun bindController() {
         controller.onConnectionStatusChanged = { status ->
             chatDetail.onConnectionStatusChanged(status)
+            chatPage.onConnectionStatusChanged(status)
         }
         controller.onChatMessage = { botId, message ->
             chatDetail.onChatMessage(botId, message)

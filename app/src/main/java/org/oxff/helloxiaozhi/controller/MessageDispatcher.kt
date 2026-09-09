@@ -237,7 +237,19 @@ class MessageDispatcher(
             }
         }
 
-        appendChat(botAtParse, ChatRole.USER, text)
+        // 去重检查：如果最近的 USER 消息与当前 STT 文本相同，说明是文字输入的消息，
+        // 已经在 sendTextMessage() 中添加过了，跳过避免重复
+        val isDuplicate = botAtParse?.let { botId ->
+            repository.messages(botId).lastOrNull()?.let { lastMsg ->
+                lastMsg.role == ChatRole.USER && lastMsg.content == text
+            }
+        } ?: false
+        
+        if (!isDuplicate) {
+            appendChat(botAtParse, ChatRole.USER, text)
+        } else {
+            Log.i(TAG, "[WS] stt text duplicate (from text input), skip append: 「$text」")
+        }
 
         // 服务器端 VAD 检测到用户说话
         mainHandler.post {

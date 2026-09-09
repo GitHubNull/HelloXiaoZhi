@@ -135,8 +135,13 @@ class ChatDetailController(
             )
             return
         }
+        
+        // 发送消息（内部已实现乐观更新，会立即在本地添加用户消息）
         controller.sendTextMessage(text)
+        
+        // 立即清空输入框并滚动到底部（乐观更新的 UI 反馈）
         input.setText("")
+        scrollBottom()
     }
 
     private fun tryStartCall() {

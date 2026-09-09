@@ -1,11 +1,14 @@
 package org.oxff.helloxiaozhi.ui.adapter
 
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import org.oxff.helloxiaozhi.R
+import org.oxff.helloxiaozhi.chat.ConnectionStatus
 import org.oxff.helloxiaozhi.data.Bot
 import org.oxff.helloxiaozhi.data.Conversation
 import org.oxff.helloxiaozhi.ui.view.AvatarPalette
@@ -24,11 +27,27 @@ class ChatListAdapter(
     private var bots: Map<String, Bot> = emptyMap()
     private var conversations: List<Conversation> = emptyList()
     private var wakeTargetBotId: String? = null
+    private var connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
 
-    fun submit(bots: List<Bot>, conversations: List<Conversation>, wakeTargetBotId: String?) {
+    fun submit(
+        bots: List<Bot>,
+        conversations: List<Conversation>,
+        wakeTargetBotId: String?,
+        connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
+    ) {
         this.bots = bots.associateBy { it.id }
         this.conversations = conversations
         this.wakeTargetBotId = wakeTargetBotId
+        this.connectionStatus = connectionStatus
+        notifyDataSetChanged()
+    }
+
+    /**
+     * 更新连接状态（避免全量刷新）
+     */
+    fun updateConnectionStatus(status: ConnectionStatus) {
+        if (this.connectionStatus == status) return
+        this.connectionStatus = status
         notifyDataSetChanged()
     }
 
@@ -41,17 +60,18 @@ class ChatListAdapter(
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.bind(conversations[position])
+        holder.bind(conversations[position], connectionStatus)
     }
 
     inner class Holder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val avatar = itemView.findViewById<TextView>(R.id.chat_avatar)
         private val unread = itemView.findViewById<TextView>(R.id.chat_unread)
         private val name = itemView.findViewById<TextView>(R.id.chat_name)
+        private val statusLine = itemView.findViewById<View>(R.id.chat_status_line)
         private val time = itemView.findViewById<TextView>(R.id.chat_time)
         private val preview = itemView.findViewById<TextView>(R.id.chat_preview)
 
-        fun bind(conversation: Conversation) {
+        fun bind(conversation: Conversation, status: ConnectionStatus) {
             val bot = bots[conversation.botId] ?: return
             val context = itemView.context
 
@@ -65,6 +85,17 @@ class ChatListAdapter(
                 " " + context.getString(R.string.chat_wake_marker)
             } else ""
             name.text = bot.name + wakeMarker
+
+            // 连接状态指示线：按 ConnectionStatus 改色（复用详情页四色）
+            val lineColorRes = when (status) {
+                ConnectionStatus.CONNECTED -> R.color.xz_status_connected
+                ConnectionStatus.CONNECTING -> R.color.xz_status_connecting
+                ConnectionStatus.DISCONNECTED -> R.color.xz_status_disconnected
+                ConnectionStatus.ERROR -> R.color.xz_status_error
+            }
+            (statusLine.background as? GradientDrawable)
+                ?.setColor(ContextCompat.getColor(context, lineColorRes))
+            statusLine.visibility = View.VISIBLE
 
             time.text = TimeFormat.relative(
                 conversation.lastTs,

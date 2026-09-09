@@ -5,6 +5,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.oxff.helloxiaozhi.R
+import org.oxff.helloxiaozhi.chat.ConnectionStatus
 import org.oxff.helloxiaozhi.data.BotRepository
 import org.oxff.helloxiaozhi.ui.adapter.ChatListAdapter
 
@@ -26,6 +27,7 @@ class ChatPageController(
     private val chatEmptyAction = root.findViewById<TextView>(R.id.chat_empty_action)
 
     private val adapter = ChatListAdapter(onClick = onOpenChat)
+    private var currentStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED
 
     init {
         chatList.layoutManager = LinearLayoutManager(root.context)
@@ -40,10 +42,18 @@ class ChatPageController(
         val wakeTarget = repository.wakeTargetBotId
 
         chatCount.text = chatCount.context.getString(R.string.chat_count, conversations.size)
-        adapter.submit(bots, conversations, wakeTarget)
+        adapter.submit(bots, conversations, wakeTarget, currentStatus)
 
         val empty = conversations.isEmpty()
         chatEmpty.visibility = if (empty) View.VISIBLE else View.GONE
         chatList.visibility = if (empty) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * 连接状态变更时更新列表项的状态指示线
+     */
+    fun onConnectionStatusChanged(status: ConnectionStatus) {
+        currentStatus = status
+        adapter.updateConnectionStatus(status)
     }
 }

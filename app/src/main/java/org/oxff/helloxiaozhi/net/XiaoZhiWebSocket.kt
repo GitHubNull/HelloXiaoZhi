@@ -160,7 +160,9 @@ class XiaoZhiWebSocket(
         ) {
             Log.e(TAG, "WS onFailure: ${t.message}, response=${response?.code}")
             this@XiaoZhiWebSocket.webSocket = null
+            // 先触发 onError 回调（用于显示错误信息），再触发 onDisconnected（用于更新连接状态）
             listener.onError(t.message ?: "连接失败")
+            listener.onDisconnected()
             scheduleReconnect()
         }
     }

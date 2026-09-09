@@ -4,6 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.18.0] - 2026-09-09
+
+### Added
+
+- 文字消息乐观更新：`XiaoZhiController.sendTextMessage` 发送时立即在本地追加 `USER` 消息并回调 UI（即时展示含时间），网络延迟或服务器未回 STT 也能看到自己的消息；`ChatDetailController` 发送后立即清空输入框并滚动到底部
+- 聊天列表项新增连接状态指示线（复用 `bg_status_line`，与聊天详情页一致）：机器人名下方与名字等宽的 3dp 圆角线，`ChatListAdapter` 按 `ConnectionStatus` 复用四色改色；`ChatPageController.onConnectionStatusChanged` 经 `updateConnectionStatus` 增量更新（状态未变不刷新），`MainActivity` 连接状态回调同步转发列表页
+
+### Fixed
+
+- 修复文字输入消息在聊天记录重复：文字输入已由乐观更新本地落库，服务器 STT 回显相同文本时 `MessageDispatcher` 检测最近一条 `USER` 消息内容相同即跳过追加（“stt text duplicate”日志）
+- 修复 WebSocket 连接失败（`onFailure`）时仅报错不更新连接状态：现先触发 `onError`（展示错误信息）再触发 `onDisconnected`（更新连接状态）；`ConnectionManager.onWebSocketError` 同步清空残留 `sessionId`（连接已断开，防脏会话号复用）
+
 ## [0.17.0] - 2026-09-09
 
 ### Added

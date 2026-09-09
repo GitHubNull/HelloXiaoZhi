@@ -145,6 +145,8 @@ class ConnectionManager(
      */
     fun onWebSocketError(message: String) {
         mainHandler.post {
+            // 错误状态下也要清空 sessionId，因为连接已经断开
+            sessionId = ""
             setConnectionStatus(ConnectionStatus.ERROR)
             onError?.invoke(message)
         }

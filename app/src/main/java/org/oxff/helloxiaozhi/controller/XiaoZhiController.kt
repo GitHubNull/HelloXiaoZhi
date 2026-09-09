@@ -335,6 +335,22 @@ class XiaoZhiController(
     fun sendTextMessage(text: String) {
         val content = text.trim()
         if (content.isEmpty()) return
+        
+        // 乐观更新：立即在本地添加用户消息，不等服务器返回 STT
+        // 这样即使服务器没有返回 STT（网络延迟、处理失败等），用户也能看到自己发送的消息
+        val botId = connectionManager.activeBotId
+        if (botId != null) {
+            val stored = repository.appendMessage(botId, org.oxff.helloxiaozhi.chat.ChatRole.USER, content)
+            if (stored != null) {
+                val message = ChatMessage(
+                    role = org.oxff.helloxiaozhi.chat.ChatRole.USER,
+                    content = content,
+                    time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(stored.ts)),
+                )
+                mainHandler.post { onChatMessage?.invoke(botId, message) }
+            }
+        }
+        
         if (stateMachine.state == ChatState.AI_SPEAKING) {
             ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
             audioPipeline.pausePlayback()
