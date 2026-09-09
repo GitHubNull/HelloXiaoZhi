@@ -32,6 +32,7 @@ class ChatDetailController(
 
     private val botName = container.findViewById<TextView>(R.id.detail_bot_name)
     private val botStatus = container.findViewById<TextView>(R.id.detail_bot_status)
+    private val statusLine = container.findViewById<View>(R.id.detail_status_line)
     private val msgList = container.findViewById<RecyclerView>(R.id.msg_list)
     private val input = container.findViewById<EditText>(R.id.msg_input)
     private val btnSend = container.findViewById<ImageButton>(R.id.btn_send)
@@ -94,6 +95,16 @@ class ChatDetailController(
 
     private fun updateStatus(bot: Bot, status: ConnectionStatus = controller.connectionStatus) {
         val context = container.context
+        // 连接状态指示线：机器人名下方，按 ConnectionStatus 改色（复用现有四色）
+        val lineColorRes = when (status) {
+            ConnectionStatus.CONNECTED -> R.color.xz_status_connected
+            ConnectionStatus.CONNECTING -> R.color.xz_status_connecting
+            ConnectionStatus.DISCONNECTED -> R.color.xz_status_disconnected
+            ConnectionStatus.ERROR -> R.color.xz_status_error
+        }
+        (statusLine.background as? android.graphics.drawable.GradientDrawable)
+            ?.setColor(androidx.core.content.ContextCompat.getColor(context, lineColorRes))
+        statusLine.visibility = View.VISIBLE
         val (textRes, enabled) = when (status) {
             ConnectionStatus.CONNECTED -> R.string.status_connected to true
             ConnectionStatus.CONNECTING -> R.string.status_connecting to false

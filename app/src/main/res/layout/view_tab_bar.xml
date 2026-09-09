@@ -34,14 +34,6 @@
                 android:src="@drawable/ic_tab_chat"
                 android:tint="@color/xz_text_hint" />
 
-            <!-- 连接状态圆点：导航栏移除后由 MainActivity.updateStatus 按 ConnectionStatus 改色 -->
-            <View
-                android:id="@+id/tab_status_dot"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:layout_gravity="top|end"
-                android:background="@drawable/bg_status_dot" />
-
             <TextView
                 android:id="@+id/tab_chat_badge"
                 android:layout_width="wrap_content"

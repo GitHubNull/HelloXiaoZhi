@@ -155,6 +155,36 @@ class BotRepositoryTest {
     }
 
     @Test
+    fun `语音通话期间 AI 消息不计未读 挂断清零后恢复累加`() {
+        val repo = newRepo()
+        val botId = BotRepositoryFactory.DEFAULT_BOT_ID
+        // 进入通话前已有残留未读
+        repo.appendMessage(botId, ChatRole.AI, "通话前的回复", ts = 500L)
+        assertEquals(1, repo.totalUnread())
+
+        // startVoiceCall：标记正在查看 + 清掉进入前的残留
+        repo.visibleBotId = botId
+        repo.clearUnread(botId)
+        assertEquals(0, repo.totalUnread())
+
+        // 通话期间多条 AI 回复（llm / tts sentence_start）均不计未读
+        repo.appendMessage(botId, ChatRole.AI, "回答一", ts = 1000L)
+        repo.appendMessage(botId, ChatRole.AI, "回答二", ts = 2000L)
+        assertEquals(0, repo.conversation(botId)!!.unread)
+        assertEquals(0, repo.totalUnread())
+
+        // stopVoiceCall：挂断再次清零并复位查看标记
+        repo.clearUnread(botId)
+        repo.visibleBotId = null
+        assertEquals(0, repo.totalUnread())
+
+        // 挂断后再来的 AI 消息恢复累加未读
+        repo.appendMessage(botId, ChatRole.AI, "挂断后的回复", ts = 3000L)
+        assertEquals(1, repo.conversation(botId)!!.unread)
+        assertEquals(1, repo.totalUnread())
+    }
+
+    @Test
     fun `向不存在的机器人追加消息被拒绝 迟到帧不应凭空创建会话`() {
         val repo = newRepo()
 

@@ -349,6 +349,12 @@ class XiaoZhiController(
         if (connectionManager.connectionStatus != ConnectionStatus.CONNECTED) {
             connectionManager.ensureConnected()
         }
+        // 通话期间把当前机器人标记为「正在查看」：用户实时听到/看到 AI 回复，
+        // 不应再计入未读；同时清掉进入通话前的残留未读。
+        connectionManager.activeBotId?.let { botId ->
+            repository.visibleBotId = botId
+            repository.clearUnread(botId)
+        }
         ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
         ws.sendText(ListenMessage.start(connectionManager.sessionId))
         audioPipeline.startVoiceCall(connectionManager.sessionId)
@@ -358,6 +364,12 @@ class XiaoZhiController(
         ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
         ws.sendText(ListenMessage.stop(connectionManager.sessionId))
         audioPipeline.stopVoiceCall()
+        // 挂断时再次清零：清掉通话开始瞬间、visibleBotId 生效前可能落入的在途帧，
+        // 然后复位 visibleBotId（详情页若仍打开会在 open()/数据回调时重设）。
+        connectionManager.activeBotId?.let { botId ->
+            repository.clearUnread(botId)
+        }
+        repository.visibleBotId = null
         // 挂断时停止本地音乐播放：MusicPlayer 的 MediaPlayer 独立于 AudioPipeline 生命周期，
         // 若用户在通话中通过语音指令播放了本地音乐，挂断后必须显式停止，否则音乐会在后台持续播放，只能杀进程终止。
         // 顺序上先 audioPipeline.stopVoiceCall() 置 inVoiceCall=false，再停音乐：

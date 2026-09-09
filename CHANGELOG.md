@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.17.0] - 2026-09-09
+
+### Added
+
+- 语音通话期间当前机器人 AI 消息不再计入未读：`startVoiceCall` 时将当前机器人标记为「正在查看」（`visibleBotId`）并清掉进入通话前的残留未读，通话中落库的 `llm`/`tts` 消息不累加未读；`stopVoiceCall` 挂断时再次清零（覆盖标记生效前可能落入的在途帧）后复位标记，挂断后的新消息恢复未读累加；新增 `BotRepositoryTest` 用例覆盖通话全生命周期
+
+### Changed
+
+- 连接状态指示迁至聊天详情页：Tab 栏聊天图标角上的 8dp 状态圆点移除（`view_tab_bar.xml`），改为详情页机器人名下方与名字等宽的 3dp 圆角状态线（新增 `drawable/bg_status_line.xml`），由 `ChatDetailController.updateStatus` 按 `ConnectionStatus` 复用四色改色并控制显隐；`MainActivity` 移除对应 `updateStatus` 及绑定/解绑调用点
+- 已连接状态色 `xz_status_connected` 由暗绿 `#FF2D5016` 改为亮绿 `#FF22C55E`，浅色背景下可清晰分辨
+
 ## [0.16.1] - 2026-09-09
 
 ### Added

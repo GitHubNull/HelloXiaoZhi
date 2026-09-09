@@ -189,7 +189,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindController() {
         controller.onConnectionStatusChanged = { status ->
-            updateStatus(status)
             chatDetail.onConnectionStatusChanged(status)
         }
         controller.onChatMessage = { botId, message ->
@@ -206,7 +205,6 @@ class MainActivity : AppCompatActivity() {
             activationModal.onError()
             toastHost.show(message, ToastHost.Kind.ERROR)
         }
-        updateStatus(controller.connectionStatus)
     }
 
     private fun unbindController() {
@@ -257,21 +255,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- 状态与渲染 ----------------
-
-    /**
-     * 连接状态指示：顶部导航栏移除后，改由 Tab 栏聊天图标上的状态圆点变色。
-     * 圆点与未读角标分居图标两角（角标 top|end 左移 10dp 避让），不会互相遮挡。
-     */
-    private fun updateStatus(status: ConnectionStatus) {
-        val colorRes = when (status) {
-            ConnectionStatus.CONNECTED -> R.color.xz_status_connected
-            ConnectionStatus.CONNECTING -> R.color.xz_status_connecting
-            ConnectionStatus.DISCONNECTED -> R.color.xz_status_disconnected
-            ConnectionStatus.ERROR -> R.color.xz_status_error
-        }
-        (findViewById<View>(R.id.tab_status_dot).background as? android.graphics.drawable.GradientDrawable)
-            ?.setColor(ContextCompat.getColor(this, colorRes))
-    }
 
     private fun renderAll() {
         chatPage.render()

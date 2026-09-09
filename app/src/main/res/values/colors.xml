@@ -60,8 +60,8 @@
     <color name="xz_hangup_start">#FF228FBD</color>
     <color name="xz_hangup_end">#FF1A6B8A</color>
 
-    <!-- 连接状态灯：设计稿四态（index.js STATE_MAP） -->
-    <color name="xz_status_connected">#FF2D5016</color>
+    <!-- 连接状态灯：设计稿四态（index.js STATE_MAP）。已连接用亮绿，浅色背景下清晰可辨 -->
+    <color name="xz_status_connected">#FF22C55E</color>
     <color name="xz_status_connecting">#FFB8860B</color>
     <color name="xz_status_disconnected">#FF8B7355</color>
     <color name="xz_status_error">#FFDC2626</color>
