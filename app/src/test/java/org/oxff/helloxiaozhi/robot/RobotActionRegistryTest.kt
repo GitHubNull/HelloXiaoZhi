@@ -251,6 +251,52 @@ class RobotActionRegistryTest {
     }
 
     @Test
+    fun `执行音乐下一首返回当前曲目信息`() {
+        // 修复后：next/previous 成功时应返回当前曲目 JSON（含 title/artist），
+        // 便于服务器确认切歌结果
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        musicPlayer.currentTrackToReturn = MusicTrack(
+            id = "2", title = "晴天", artist = "周杰伦", album = "范特西",
+            duration = 200000, path = "/music/sunny.mp3", source = MusicSource.LOCAL,
+        )
+
+        val result = registry.execute("self.music.next", emptyMap())
+        assertNotNull(result)
+        val json = JsonParser.parseString(result).asJsonObject
+        assertEquals("playing", json.get("result").asString)
+        assertEquals("晴天", json.get("track").asString)
+        assertEquals("周杰伦", json.get("artist").asString)
+    }
+
+    @Test
+    fun `执行音乐上一首返回当前曲目信息`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        musicPlayer.currentTrackToReturn = MusicTrack(
+            id = "1", title = "想要潇洒的离开", artist = "韩宝仪", album = null,
+            duration = 200000, path = "/music/a.mp3", source = MusicSource.LOCAL,
+        )
+
+        val result = registry.execute("self.music.previous", emptyMap())
+        assertNotNull(result)
+        val json = JsonParser.parseString(result).asJsonObject
+        assertEquals("playing", json.get("result").asString)
+        assertEquals("想要潇洒的离开", json.get("track").asString)
+        assertEquals("韩宝仪", json.get("artist").asString)
+    }
+
+    @Test
+    fun `执行音乐下一首无曲目时返回 ok`() {
+        // next() 成功但 getCurrentTrack() 为 null 的边界情况
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        musicPlayer.currentTrackToReturn = null
+
+        val result = registry.execute("self.music.next", emptyMap())
+        assertNotNull(result)
+        val json = JsonParser.parseString(result).asJsonObject
+        assertEquals("ok", json.get("result").asString)
+    }
+
+    @Test
     fun `音乐动作 tools list JSON 包含 play 工具`() {
         val (registry, _, _) = newRegistryWithMusic()
         val tools = registry.buildToolsListJson()
@@ -373,6 +419,7 @@ class RobotActionRegistryTest {
         var stopCalled = false
         var nextCalled = false
         var previousCalled = false
+        var currentTrackToReturn: MusicTrack? = null
 
         override fun play(track: MusicTrack) {
             playCalled = true
@@ -395,6 +442,8 @@ class RobotActionRegistryTest {
             previousCalled = true
             return true
         }
+
+        override fun getCurrentTrack(): MusicTrack? = currentTrackToReturn
     }
 
     private class FakeMusicLibrary(context: android.content.Context) : MusicLibrary(

@@ -124,6 +124,7 @@ class MusicSettingsActivity : AppCompatActivity() {
 
         musicSwitch.onCheckedChange = { checked ->
             controller.config.musicEnabled = checked
+            // 同步本地关键词兜底映射器开关（延迟兜底机制由该开关控制）
             controller.musicActionMapper.enabled = checked
             toastHost.show(
                 getString(if (checked) R.string.toast_music_enabled else R.string.toast_music_disabled),

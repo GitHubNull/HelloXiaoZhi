@@ -14,8 +14,8 @@ import org.oxff.helloxiaozhi.chat.LlmMessage
 import org.oxff.helloxiaozhi.chat.SttMessage
 import org.oxff.helloxiaozhi.chat.TtsMessage
 import org.oxff.helloxiaozhi.data.BotRepository
-import org.oxff.helloxiaozhi.robot.McpActionHandler
 import org.oxff.helloxiaozhi.music.MusicActionMapper
+import org.oxff.helloxiaozhi.robot.McpActionHandler
 import org.oxff.helloxiaozhi.wake.SherpaOnnxWakeWordEngine
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,8 +74,17 @@ class MessageDispatcher(
     /** MCP 动作处理器（由 XiaoZhiController 注入） */
     var mcpActionHandler: McpActionHandler? = null
 
-    /** 音乐动作映射器（由 XiaoZhiController 注入） */
+    /**
+     * 音乐动作映射器（由 XiaoZhiController 注入，enabled 跟随音乐功能开关）。
+     *
+     * 仅用于「延迟兜底」：音乐指令命中后先落库透传服务器 AI，给服务器留出
+     * [MUSIC_COMMAND_DELAY_MS] 窗口期经 MCP `self.music.*` 执行；窗口期超时
+     * 后才由本映射器本地关键词执行（[scheduleMusicFallback]）。
+     */
     var musicActionMapper: MusicActionMapper? = null
+
+    /** 待执行的本地音乐兜底任务（见 [scheduleMusicFallback]） */
+    private var pendingMusicCommand: Runnable? = null
 
     /**
      * Barge-in 回调：AI 说话期间服务器端 VAD 检测到用户开口（STT 消息）时触发，
@@ -169,11 +178,17 @@ class MessageDispatcher(
     }
 
     /**
-     * 本地音乐播放期间的 STT 处理：唤醒词门控 + 指令分类。
+     * 本地音乐播放期间的 STT 处理：唤醒词门控 + 指令分类 + 延迟兜底。
      *
-     * 关键顺序：**先判定是不是音乐控制指令，再决定要不要停音乐**。
-     * 旧实现无条件先调 [onWakeWordInterrupt] 停音乐，导致 "阿妹阿妹，下一首"
-     * 会先把播放彻底终止、再执行已无意义的 next()，切歌失效。
+     * 音乐播放期间，所有语音指令必须带唤醒词前缀才能被处理；
+     * 无唤醒词的 STT 视为环境音/对他人说话，直接忽略。
+     *
+     * 音乐指令采用「延迟兜底机制」：命中指令关键词后**先落库**透传服务器 AI
+     * （服务器在 [MUSIC_COMMAND_DELAY_MS] 窗口期可经 MCP `self.music.*` 执行），
+     * 同时启动本地兜底定时器；服务器未在窗口期内响应才本地执行。
+     *
+     * 关键顺序：**先分类、再决定停不停音乐**。旧实现无条件先调 [onWakeWordInterrupt]
+     * 停音乐，“阿妹阿妹，下一首” 会先终止播放、再执行已无意义的 next()，切歌失效。
      */
     private fun handleSttDuringMusic(rawText: String, botAtParse: String?) {
         val stripped = stripWakeWordPrefix(rawText)
@@ -189,33 +204,64 @@ class MessageDispatcher(
             return
         }
 
-        // 唤醒词 + 后续文本：音乐控制指令属纯设备操作，不是对话内容
+        // 指令分类（只判定不执行）：播放类表达明确听歌意图，任何场景都本地兜底；
+        // 控制类仅在本地音乐播放中才拦截——无音乐时“你别说话”/“先停下来”是正常聊天，
+        // 拦截会吞掉用户对话并误发 abort。由 musicActive 参数区分
         val mapper = musicActionMapper
-        if (mapper != null &&
-            (mapper.isControlCommand(stripped) || mapper.isPlayRequest(stripped)) &&
-            mapper.processText(stripped)
-        ) {
-            // 本地已执行控制动作（stop/pause/next/...）：发 abort 取消服务器回复
-            // 并开启抑制窗口，且不落库、不迁移状态——避免 AI 接着 "别唱了"
-            // 这类指令闲聊（用户实测的尴尬场景）
-            Log.i(TAG, "[WS] local music command handled, suppress server reply: 「$stripped」")
-            onLocalMusicHandled?.invoke()
+        val musicActive = isLocalMusicPlayingProvider?.invoke() == true
+        val isMusicCommand = mapper != null &&
+            (mapper.isPlayRequest(stripped) || (musicActive && mapper.isControlCommand(stripped)))
+        if (isMusicCommand) {
+            // 音乐指令：落库（不迁移状态、不停音乐），让服务器 AI 看到指令文本并
+            // 在窗口期内优先经 MCP 执行；同时启动本地兜底定时器，超时未响应才本地执行
+            Log.i(TAG, "[WS] music command detected, arm local fallback: 「$stripped」")
+            appendChat(botAtParse, ChatRole.USER, stripped)
+            scheduleMusicFallback(stripped)
             return
         }
 
-        // 非控制指令 → 用户是想对话：停音乐后走正常聊天流程
+        // 非指令 → 用户是想对话：停音乐后走正常聊天流程（服务器 AI 会处理音乐控制）
         Log.i(TAG, "[WS] wake word interrupt for chat: 「$rawText」")
         onWakeWordInterrupt?.invoke()
         handleSttText(stripped, botAtParse, musicActive = false)
     }
 
     /**
-     * STT 文本的常规处理：音乐指令拦截 → 落库 → 状态迁移
+     * 启动本地音乐指令兜底定时器：给服务器 AI 留出 [MUSIC_COMMAND_DELAY_MS]
+     * 窗口期经 MCP 调用 `self.music.*`；窗口期内收到 MCP 音乐工具调用会经
+     * [cancelPendingMusicCommand] 取消本定时器，避免服务器执行后再本地重复执行。
+     */
+    private fun scheduleMusicFallback(text: String) {
+        cancelPendingMusicCommand()
+        val runnable = Runnable {
+            pendingMusicCommand = null
+            val mapper = musicActionMapper
+            if (mapper != null && mapper.processText(text)) {
+                Log.i(TAG, "[WS] local music fallback executed: 「$text」")
+                onLocalMusicHandled?.invoke()
+            } else {
+                Log.i(TAG, "[WS] local music fallback skipped (disabled or not matched): 「$text」")
+            }
+        }
+        pendingMusicCommand = runnable
+        mainHandler.postDelayed(runnable, MUSIC_COMMAND_DELAY_MS)
+    }
+
+    /**
+     * 取消待执行的本地音乐指令兜底（服务器已经 MCP 执行时调用）。
+     * 供外部（handleMcp）在收到 MCP 音乐工具调用时同步取消。
+     */
+    fun cancelPendingMusicCommand() {
+        pendingMusicCommand?.let {
+            mainHandler.removeCallbacks(it)
+            pendingMusicCommand = null
+        }
+    }
+
+    /**
+     * STT 文本的常规处理：落库 → 状态迁移
      *
-     * @param musicActive 本地音乐是否正在播放。仅播放期间才拦截「控制类」指令
-     *   （停止/暂停/切歌）；无音乐时这类词很可能是正常聊天内容
-     *   （"你别说话"/"先停下来"），拦截会吞掉用户对话并误发 abort。
-     *   「播放类」指令（点歌）表达明确听歌意图，任何场景都本地处理。
+     * 注意：本地不再拦截音乐控制指令，完全由服务器 AI 通过 MCP 工具控制。
      */
     private fun handleSttText(text: String, botAtParse: String?, musicActive: Boolean) {
         Log.i(TAG, "[WS] stt text=「$text」 musicActive=$musicActive")
@@ -224,24 +270,14 @@ class MessageDispatcher(
         // 否则这一轮的 AI 回复会被误丢
         onClearReplySuppress?.invoke()
 
-        val mapper = musicActionMapper
-        if (mapper != null) {
-            val intercept = mapper.isPlayRequest(text) ||
-                (musicActive && mapper.isControlCommand(text))
-            if (intercept && mapper.processText(text)) {
-                Log.i(TAG, "[WS] stt matched music command, skip server processing")
-                // 通知外部打断服务器 TTS：服务器已收到该语音，AI 可能会播放自己平台的音乐，
-                // 需要发送 AbortMessage 阻止，避免与本地播放的音乐冲突
-                onLocalMusicHandled?.invoke()
-                return
-            }
-        }
-
         // 去重检查：如果最近的 USER 消息与当前 STT 文本相同，说明是文字输入的消息，
         // 已经在 sendTextMessage() 中添加过了，跳过避免重复
+        // 使用宽松匹配：忽略大小写、首尾空格、连续空格差异
+        val normalizedText = text.trim().replace(Regex("\\s+"), " ").lowercase()
         val isDuplicate = botAtParse?.let { botId ->
             repository.messages(botId).lastOrNull()?.let { lastMsg ->
-                lastMsg.role == ChatRole.USER && lastMsg.content == text
+                lastMsg.role == ChatRole.USER && 
+                lastMsg.content.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedText
             }
         } ?: false
         
@@ -366,6 +402,14 @@ class MessageDispatcher(
             return
         }
         Log.i(TAG, "[WS] mcp method=${payload.get("method")?.asString}")
+
+        // 服务器 AI 已通过 MCP 调用音乐工具（self.music.*）：取消本地待执行的
+        // 延迟兜底，避免服务器执行后再本地重复执行（next 变 two-step 等问题）
+        val toolName = payload.getAsJsonObject("params")?.get("name")?.asString
+        if (toolName?.startsWith("self.music.") == true) {
+            cancelPendingMusicCommand()
+        }
+
         val response = handler.handleMcpMessage(payload) ?: return
         // 将响应封装为 mcp 消息回发
         val responseWrapper = JsonObject()
@@ -414,6 +458,13 @@ class MessageDispatcher(
     private companion object {
         const val TAG = "MessageDispatcher"
         const val DEFAULT_SAMPLE_RATE = 16000
+
+        /**
+         * 本地音乐指令兜底延迟（ms）：命中音乐指令后先落库透传服务器 AI，
+         * 给服务器留出经 MCP `self.music.*` 执行的窗口期；超时未响应才本地执行。
+         * 取值需覆盖 LLM 理解 + 工具调用的往返时延，过短会在服务器执行前抢跑。
+         */
+        const val MUSIC_COMMAND_DELAY_MS = 800L
 
         /** AI 结束语关键词（用于自动挂断语音通话） */
         val FAREWELL_KEYWORDS = listOf(

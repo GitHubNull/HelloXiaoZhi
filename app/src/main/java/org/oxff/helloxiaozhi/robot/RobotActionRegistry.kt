@@ -497,7 +497,10 @@ class RobotActionRegistry(
             description = "播放下一首",
             category = Category.MUSIC,
             executor = {
-                if (player.next()) OK_RESULT else null
+                if (player.next()) {
+                    val track = player.getCurrentTrack()
+                    if (track != null) buildPlayingJson(track) else OK_RESULT
+                } else null
             },
         ))
 
@@ -506,7 +509,10 @@ class RobotActionRegistry(
             description = "播放上一首",
             category = Category.MUSIC,
             executor = {
-                if (player.previous()) OK_RESULT else null
+                if (player.previous()) {
+                    val track = player.getCurrentTrack()
+                    if (track != null) buildPlayingJson(track) else OK_RESULT
+                } else null
             },
         ))
 

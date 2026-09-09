@@ -105,6 +105,39 @@ class MessageDispatcherTest {
         dispatcher.onWakeWordInterrupt = { wakeWordInterruptCount++ }
         dispatcher.onUserStartSpeaking = { userStartSpeakingCount++ }
         dispatcher.onChatMessage = { _, message -> receivedChatMessages.add(message.role) }
+
+        // 注入 MCP 处理器（测试 MCP 音乐工具调用取消本地兜底指令）
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val musicPlayer = RecordingMusicPlayer(context)
+        val musicLibrary = StubMusicLibrary(context)
+        val registry = org.oxff.helloxiaozhi.robot.RobotActionRegistry(
+            object : org.oxff.helloxiaozhi.robot.RobotActionExecutor {
+                override fun rotateHead(angle: Float, speed: Int) {}
+                override fun nodHead(speed: Int) {}
+                override fun shakeHead(speed: Int) {}
+                override fun moveForward(speed: Float, duration: Long) {}
+                override fun moveBackward(speed: Float, duration: Long) {}
+                override fun turnLeft(speed: Float, angle: Float) {}
+                override fun turnRight(speed: Float, angle: Float) {}
+                override fun stopMoving() {}
+                override fun showEmotion(name: String, speaking: Boolean, loops: Int) {}
+                override fun dismissEmotion() {}
+                override fun expressAgreement() {}
+                override fun expressDisagreement() {}
+                override fun expressCuriosity() {}
+                override fun expressExcitement() {}
+                override fun expressLove() {}
+                override fun expressShyness() {}
+                override fun expressSurprise() {}
+                override fun waveHello() {}
+                override fun dance() {}
+                override fun think() {}
+                override fun resetToDefault() {}
+            },
+            musicPlayer,
+            musicLibrary,
+        )
+        dispatcher.mcpActionHandler = org.oxff.helloxiaozhi.robot.McpActionHandler(registry)
     }
 
     @Test
@@ -435,9 +468,9 @@ class MessageDispatcherTest {
     // ---------------- 音乐控制指令不得污染聊天 ----------------
 
     @Test
-    fun `音乐播放中唤醒词加停止指令本地执行且不落库`() {
-        // 真机实测：说「阿妹阿妹，别唱了」后音乐停了，但这句话被当作聊天内容
-        // 落库并上行，服务器 AI 接着围绕"别唱了"闲聊，体验割裂
+    fun `音乐播放中唤醒词加停止指令延迟执行且落库但不迁移状态`() {
+        // 新行为：音乐指令不再立即执行，而是延迟 800ms 兜底执行；
+        // 同时落库让服务器 AI 看到，但不迁移状态（避免打断音乐）
         val (mapper, player) = newMapperWithTracks()
         dispatcher.musicActionMapper = mapper
         dispatcher.isLocalMusicPlayingProvider = { true }
@@ -447,15 +480,23 @@ class MessageDispatcherTest {
         dispatcher.handleTextMessage("""{"type":"stt","text":"阿妹阿妹，别唱了"}""", "bot_1")
         Shadows.shadowOf(Looper.getMainLooper()).idle()
 
-        assertEquals(1, player.stopCount) // 本地已停音乐
-        assertEquals(1, localHandled) // 发 abort + 开抑制窗口
-        assertEquals(0, receivedChatMessages.size) // 不得落库为聊天内容
+        // 立即检查：指令已落库但尚未执行（等待 800ms 兜底定时器）
+        assertEquals(1, receivedChatMessages.size) // 落库让服务器看到
+        assertEquals(0, player.stopCount) // 尚未执行
+        assertEquals(0, localHandled) // 尚未发 abort
         assertEquals(0, userStartSpeakingCount) // 不迁移状态
         assertEquals(ChatState.IDLE, stateMachine.state)
+
+        // 推进时间超过 800ms，触发兜底执行
+        Shadows.shadowOf(Looper.getMainLooper()).idle(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(1, player.stopCount) // 兜底执行
+        assertEquals(1, localHandled) // 发 abort + 开抑制窗口
     }
 
     @Test
-    fun `音乐播放中唤醒词加切歌指令不得停止播放`() {
+    fun `音乐播放中唤醒词加切歌指令延迟执行且不得停止播放`() {
         // 回归：旧实现无条件先调 onWakeWordInterrupt 停音乐，
         // "阿妹阿妹，下一首" 会先终止播放、再执行已无意义的 next()
         val (mapper, player) = newMapperWithTracks()
@@ -465,14 +506,23 @@ class MessageDispatcherTest {
         dispatcher.handleTextMessage("""{"type":"stt","text":"阿妹阿妹，下一首"}""", "bot_1")
         Shadows.shadowOf(Looper.getMainLooper()).idle()
 
+        // 立即检查：尚未执行
+        assertEquals(0, player.nextCount)
+        assertEquals(0, player.stopCount)
+        assertEquals(0, wakeWordInterruptCount)
+        assertEquals(1, receivedChatMessages.size) // 落库让服务器看到
+
+        // 推进时间触发兜底执行
+        Shadows.shadowOf(Looper.getMainLooper()).idle(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
         assertEquals(1, player.nextCount)
         assertEquals(0, player.stopCount) // 关键：不得停止播放
         assertEquals(0, wakeWordInterruptCount) // 不触发停音乐回调
-        assertEquals(0, receivedChatMessages.size)
     }
 
     @Test
-    fun `音乐播放中唤醒词加点歌指令换歌且不落库`() {
+    fun `音乐播放中唤醒词加点歌指令延迟执行换歌且落库`() {
         val (mapper, player) = newMapperWithTracks()
         dispatcher.musicActionMapper = mapper
         dispatcher.isLocalMusicPlayingProvider = { true }
@@ -482,9 +532,17 @@ class MessageDispatcherTest {
         dispatcher.handleTextMessage("""{"type":"stt","text":"阿妹阿妹，播放韩宝仪的歌"}""", "bot_1")
         Shadows.shadowOf(Looper.getMainLooper()).idle()
 
+        // 立即检查：尚未执行
+        assertEquals(null, player.lastPlayedTrack)
+        assertEquals(0, localHandled)
+        assertEquals(1, receivedChatMessages.size) // 落库让服务器看到
+
+        // 推进时间触发兜底执行
+        Shadows.shadowOf(Looper.getMainLooper()).idle(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
         assertEquals("想要潇洒的离开", player.lastPlayedTrack?.title)
         assertEquals(1, localHandled)
-        assertEquals(0, receivedChatMessages.size)
     }
 
     @Test
@@ -522,6 +580,59 @@ class MessageDispatcherTest {
         assertEquals(0, localHandled) // 不得误发 abort
         assertEquals(1, receivedChatMessages.size) // 正常落库
         assertEquals(ChatState.USER_SPEAKING, stateMachine.state)
+    }
+
+    @Test
+    fun `MCP 音乐工具调用取消待执行的本地兜底指令`() {
+        // 用户说"下一首"后，服务器在 800ms 窗口期内通过 MCP 调用 self.music.next，
+        // 本地兜底定时器应被取消，避免重复执行
+        val (mapper, player) = newMapperWithTracks()
+        dispatcher.musicActionMapper = mapper
+        dispatcher.isLocalMusicPlayingProvider = { true }
+        var localHandled = 0
+        dispatcher.onLocalMusicHandled = { localHandled++ }
+
+        // 用户语音指令
+        dispatcher.handleTextMessage("""{"type":"stt","text":"阿妹阿妹，下一首"}""", "bot_1")
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(0, player.nextCount) // 尚未执行
+
+        // 服务器 MCP 调用 self.music.next（模拟）
+        val mcpJson = """{"type":"mcp","payload":{"jsonrpc":"2.0","method":"tools/call","params":{"name":"self.music.next","arguments":{}},"id":1}}"""
+        dispatcher.handleTextMessage(mcpJson, "bot_1")
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        // 推进时间超过 800ms，兜底定时器应已被取消
+        Shadows.shadowOf(Looper.getMainLooper()).idle(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(0, player.nextCount) // 本地兜底未执行
+        assertEquals(0, localHandled) // 未发 abort
+    }
+
+    @Test
+    fun `MCP 非音乐工具调用不取消待执行的本地兜底指令`() {
+        // 服务器调用非音乐工具（如 self.robot.nod），本地音乐指令兜底仍应执行
+        val (mapper, player) = newMapperWithTracks()
+        dispatcher.musicActionMapper = mapper
+        dispatcher.isLocalMusicPlayingProvider = { true }
+        var localHandled = 0
+        dispatcher.onLocalMusicHandled = { localHandled++ }
+
+        dispatcher.handleTextMessage("""{"type":"stt","text":"阿妹阿妹，下一首"}""", "bot_1")
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        // 服务器 MCP 调用非音乐工具
+        val mcpJson = """{"type":"mcp","payload":{"jsonrpc":"2.0","method":"tools/call","params":{"name":"self.robot.nod","arguments":{}},"id":1}}"""
+        dispatcher.handleTextMessage(mcpJson, "bot_1")
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        // 推进时间超过 800ms，兜底定时器仍应执行
+        Shadows.shadowOf(Looper.getMainLooper()).idle(1000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(1, player.nextCount) // 本地兜底执行
+        assertEquals(1, localHandled)
     }
 
     // ---------------- 服务器回复抑制窗口 ----------------

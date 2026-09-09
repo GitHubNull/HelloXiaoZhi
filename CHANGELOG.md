@@ -4,6 +4,26 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.19.0] - 2026-09-09
+
+### Added
+
+- 音乐指令「延迟兜底机制」（本地音乐播放中带唤醒词的语音指令）：命中 `MusicActionMapper` 指令分类（播放类任何场景、控制类仅音乐播放中）后**先落库**透传服务器 AI（不迁移状态、不停音乐），同时启动 `MUSIC_COMMAND_DELAY_MS=800ms` 本地兜底定时器；服务器在窗口期经 MCP `self.music.*` 工具执行则自动取消本地兜底（`handleMcp` 检测 `params.name` 前缀，非音乐工具不取消），超时才本地关键词执行并触发 abort + 回复抑制窗口；`MusicActionMapper` 恢复由 `XiaoZhiController` 注入、开关跟随 `musicEnabled`（`MusicSettingsActivity` 同步）；新增 `MessageDispatcherTest` 用例（延迟执行且落库不迁移状态、切歌不停播、MCP 取消、非音乐工具不取消）
+- `MusicPlayer.play` 播放单曲时自动填充播放列表：以目标曲目为起点从曲库随机补充后续曲目（`PLAYLIST_AUTO_FILL_SIZE=20`），当前列表已含该曲目则保留列表跳转不重启；`XiaoZhiController` 注入 `musicLibrary` 引用
+- `MusicPlayer` 播放代际计数器 `playbackGeneration`：每次 `startPlayback` 自增，旧 `MediaPlayer` 实例的 `prepareAsync`/`onCompletion`/`onError` 异步回调在新实例产生后失效（release/ignore），`next`/`previous` 先 `stopInternal` 释放旧实例，防多实例并发音频混音
+- `self.music.next`/`previous` MCP 工具执行成功后返回当前曲目 JSON（playing + track + artist），便于服务器确认切歌结果；`getCurrentTrack` 改 `open` 供覆写；新增 `RobotActionRegistryTest` 用例
+- `ChatDetailController` 打开对话时缓存消息列表复用（`onChatMessage` 不再每次全量查询），乐观更新消息与后续回显按「内容 + 角色」去重；打开详情页时若连接已断开自动 `ensureConnected`
+
+### Fixed
+
+- 修复 `MusicPlayer` 快速切歌/重播时新旧 `MediaPlayer` 实例并发导致双路音频混音（异步回调代际隔离）
+- 修复打开聊天详情页时连接可能已断开但无感知：`ChatDetailController.open` 检测非 `CONNECTED` 即触发重连
+
+### Changed
+
+- 音乐指令路径由「本地立即拦截执行（不落库）」改为「服务器 AI 优先（MCP）+ 本地延迟兜底」双路径：指令文本先入聊天上下文供服务器 AI 理解执行，本地仅在服务器无响应时兜底，避免抢跑与指令语义丢失
+- STT 去重采用宽松匹配（忽略大小写、首尾与连续空格差异），文字输入回显更稳
+
 ## [0.18.0] - 2026-09-09
 
 ### Added

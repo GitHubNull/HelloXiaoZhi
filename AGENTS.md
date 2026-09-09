@@ -74,10 +74,11 @@ enum class ChatState { IDLE, USER_SPEAKING, AI_SPEAKING }
 
 音乐控制指令（停止/暂停/切歌/点歌）属**纯设备操作**，不得进入聊天上下文。三层机制缺一不可（真机实测：只扩充关键词表仍会让 AI 接着 “别唱了” 闲聊）：
 
-1. **指令分类**（`MusicActionMapper.isControlCommand` / `isPlayRequest`，只判定不执行）：`MessageDispatcher.handleSttDuringMusic` 据此分流。
+1. **指令分类 + 延迟兜底**（`MusicActionMapper.isControlCommand` / `isPlayRequest`，只判定不执行）：`MessageDispatcher.handleSttDuringMusic` 据此分流。
    - **顺序不变式**：必须**先分类、再决定停不停音乐**。旧实现无条件先调 `onWakeWordInterrupt` 停音乐，“阿妹阿妹，下一首” 会先彻底终止播放、再执行已无意义的 `next()`，切歌失效
-   - **拦截范围不变式**：「播放类」任何场景都本地拦截（听歌意图明确，比绕 LLM+MCP 往返快）；「控制类」**仅音乐播放中**拦截——无音乐时 “你别说话”/“先停下来” 是正常聊天，拦截会吞掉用户对话并误发 abort。由 `handleSttText(musicActive)` 参数区分
-   - 命中 → `onLocalMusicHandled`（发 `AbortMessage` + 开抑制窗口），**不落库、不迁移状态**；未命中 → `onWakeWordInterrupt` 停音乐后走正常聊天流程
+   - **拦截范围不变式**：「播放类」任何场景都进延迟兜底路径（听歌意图明确，即使无音乐也覆盖）；「控制类」**仅音乐播放中**拦截——无音乐时 “你别说话”/“先停下来” 是正常聊天，拦截会吞掉用户对话并误发 abort。由 `handleSttDuringMusic` 内的 `musicActive` 判定区分
+   - **延迟兜底时序（真机实测驱动的取舍，不得调换）**：命中 → **先 `appendChat` 落库**（透传服务器 AI，不迁移状态、不停音乐）+ 启动 `MUSIC_COMMAND_DELAY_MS=800ms` 本地兜底定时器（`scheduleMusicFallback`）→ 服务器在窗口期内经 MCP `self.music.*` 调用则 `cancelPendingMusicCommand()` 取消本地执行（`handleMcp` 检测 `params.name` 前缀，非音乐工具不取消）→ 超时才本地 `processText` 执行并 `onLocalMusicHandled`（发 `AbortMessage` + 开抑制窗口）。立即本地执行会抢跑服务器 AI 的 MCP 路径；只落库不兜底则在服务器不理解指令时音乐毫无响应
+   - 未命中 → `onWakeWordInterrupt` 停音乐后走正常聊天流程
 2. **服务器回复抑制窗口**（`AudioPipeline.suppressServerReply`，`SERVER_REPLY_SUPPRESS_MS=12000L`）：停止类指令会让 `isLocalMusicPlaying` 立即复位，「音乐期间丢弃 TTS」那道门控随之失效，abort 在途的 `llm`/`tts` 文本与音频帧仍会播出。窗口内四处丢弃：`AudioPipeline.onTtsStart` / `scheduleAudioFrame`（音频）+ `MessageDispatcher.handleLlm` / `handleTts`（文本，经 `isReplySuppressedProvider`）。取值需覆盖两类：abort 在途（网络往返 + 服务器停止生成 + 在途帧排空）**+ 同批语音被服务器切出的 STT 尾巴所开启的一轮完整回复**（真机实测约 5~15s，过短会漏播后半句）。
 3. **STT 免疫期**（`handleStt` 入口把 `isReplySuppressed()` 也纳入门控）：音乐已停后，同一句语音可能被服务器切出第二条 STT（真机实测「阿妹阿妹，别唱了」后紧跟「这。」）。若只判 `isLocalMusicPlaying`，音乐一停这条尾巴就绕过 `handleSttDuringMusic`、走 `handleSttText` 落库并清掉抑制，AI 随即围绕它接话。免疫期内无唤醒词的 STT 一律忽略（不落库、不迁移状态、不清抑制）；带唤醒词的真实对话照常。
 4. **窗口清除**：用户以唤醒词开启新一轮真实对话（`handleSttText` 落库前）主动 `clearServerReplySuppress()`，避免下一轮 AI 回复被误丢；无唤醒词的尾巴不触碰抑制，与超时自然到期构成双保险
@@ -179,7 +180,7 @@ XiaoZhiWebSocket.onMessage(ByteString) → listener.onAudioFrame
 - 改动上行增强参数（目标电平/增益上下限/噪声门阈值）：必须更新 `MicEnhancerTest` 对应用例；调参前注意「底噪跟踪只吃低于底噪×4 的帧」「电平用原始帧与增强器解耦」两条不变式
 - 改动音乐关键词归一化（`MusicKeywordNormalizer`）：必须更新 `MusicKeywordNormalizerTest`；注意四条不变式：① 曲库 `search` 是「关键词须被标题/歌手包含」语义，候选越长越难命中，**禁止**退回「清洗出唯一关键词」的单串方案（真机实测口语长句必失配）；② 每片段须同时产出激进（剥填充词）与保守（保留）两个变体，否则以 "那个/这个" 开头的真实曲名会被误剥；③ 泛化词（"音乐"/"歌曲"）与纯填充词不得进候选，否则会误命中同名曲目；④ 含分隔标点的候选排在末尾兜底，覆盖曲名本身带逗号的情况
 - 改动音乐指令匹配（`MusicActionMapper` 的 `PLAY_KEYWORDS` 等门控词表）：门控词表决定整句能否进入对应分支，漏一个口语说法（如 "放一下"）就会让整句落到 `else` 而不触发任何播放；新增分支须保持「停止/暂停/恢复/切歌 > 随机 > 类型 > 专辑 > 播放」的优先级顺序
-- 改动音乐指令拦截（`isControlCommand` / `isPlayRequest` / 回复抑制窗口 / STT 免疫期）：必须更新 `MessageDispatcherTest` 对应用例；注意四条不变式：① 音乐播放中「先分类指令、再决定停不停音乐」，顺序反了会让切歌类指令失效；② 控制类指令仅在 `musicActive=true` 时拦截，否则日常聊天（“你别说话”）会被吞掉并误发 abort；③ 本地指令命中后必须**同时**发 abort **和**开抑制窗口，只发 abort 不够（此时 `isLocalMusicPlaying` 已复位，在途 TTS 会照常播出）；④ 抑制窗口（`SERVER_REPLY_SUPPRESS_MS`）须覆盖服务器对同批语音尾巴开启的一轮完整回复（≥10s），且 `handleStt` 入口须把 `isReplySuppressed()` 纳入门控以丢弃免疫期内无唤醒词的 STT 尾巴，否则音乐一停该尾巴会落库并清掉抑制、触发 AI 接话（真机实测「这。」）。控制词表（`STOP_KEYWORDS` 等）须覆盖口语说法（“别唱了”/“不听了”/“安静点”），漏词会让指令被当作聊天内容落库并触发 AI 接着闲聊
+- 改动音乐指令拦截（`isControlCommand` / `isPlayRequest` / 回复抑制窗口 / STT 免疫期 / 延迟兜底机制）：必须更新 `MessageDispatcherTest` 对应用例；注意五条不变式：① 音乐播放中「先分类指令、再决定停不停音乐」，顺序反了会让切歌类指令失效；② 控制类指令仅在 `musicActive=true` 时拦截，否则日常聊天（"你别说话"）会被吞掉并误发 abort；③ 本地指令命中后必须**同时**发 abort **和**开抑制窗口，只发 abort 不够（此时 `isLocalMusicPlaying` 已复位，在途 TTS 会照常播出）；④ 抑制窗口（`SERVER_REPLY_SUPPRESS_MS`）须覆盖服务器对同批语音尾巴开启的一轮完整回复（≥10s），且 `handleStt` 入口须把 `isReplySuppressed()` 纳入门控以丢弃免疫期内无唤醒词的 STT 尾巴，否则音乐一停该尾巴会落库并清掉抑制、触发 AI 接话（真机实测「这。」）；⑤ 音乐指令采用**延迟兜底机制**（`MUSIC_COMMAND_DELAY_MS=800ms`）：命中关键词后先落库透传给服务器 AI，同时启动本地兜底定时器；若服务器在窗口期内通过 MCP 调用 `self.music.*`，则 `cancelPendingMusicCommand()` 取消本地执行，超时后才本地兜底。控制词表（`STOP_KEYWORDS` 等）须覆盖口语说法（"别唱了"/"不听了"/"安静点"），漏词会让指令被当作聊天内容落库并触发 AI 接着闲聊
 - 真机排障：Logcat 过滤 `XiaoZhiController`（连接/消息）、`AudioRecorder`（电平帧）、`XiaoZhiWebSocket`（WS 生命周期）、`MusicActionMapper`（点歌候选与命中）、`MessageDispatcher`（指令分类与抑制丢弃）、`AudioPipeline`（抑制窗口开关）、`[SM]` 前缀（状态迁移）
 
 ## 9. 延伸资料：Visbot 机器人功能调用开发指导文档

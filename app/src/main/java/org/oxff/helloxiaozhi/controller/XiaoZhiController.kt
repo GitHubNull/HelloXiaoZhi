@@ -154,6 +154,8 @@ class XiaoZhiController(
         restoreCacheAsync()
     }
     val musicPlayer = MusicPlayer(appContext).apply {
+        // 注入音乐库引用，用于播放单曲时自动填充播放列表
+        musicLibrary = this@XiaoZhiController.musicLibrary
         // 音乐播放时暂停 TTS 并屏蔽服务器音频，音乐停止时恢复
         onMusicStart = {
             // 标记本地音乐播放中，AudioPipeline 将丢弃服务器下发的 TTS 音频帧，
@@ -192,7 +194,8 @@ class XiaoZhiController(
         enabled = config.robotActionEnabled
     }
 
-    // 音乐关键词匹配降级方案
+    // 音乐关键词匹配降级方案（延迟兜底：服务器 AI 未在窗口期经 MCP self.music.*
+    // 响应时才由 MessageDispatcher 本地关键词执行）
     val musicActionMapper = MusicActionMapper(musicPlayer, musicLibrary).apply {
         enabled = config.musicEnabled
     }
@@ -252,6 +255,8 @@ class XiaoZhiController(
             }
         }
         messageDispatcher.mcpActionHandler = mcpActionHandler
+        // 注入音乐动作映射器：延迟兜底用（handleStt 命中音乐指令后先落库透传服务器，
+        // 800ms 窗口期服务器未经 MCP 响应才本地关键词执行）
         messageDispatcher.musicActionMapper = musicActionMapper
         messageDispatcher.onMcpResponse = { responseJson ->
             Log.i(TAG, "[WS] send mcp response: ${responseJson.take(300)}")

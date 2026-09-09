@@ -41,6 +41,9 @@ class ChatDetailController(
 
     private val adapter = MessageAdapter()
     private var openBotId: String? = null
+    
+    /** 当前打开的对话消息缓存（避免每次 onChatMessage 都从 repository 全量查询） */
+    private var cachedMessages: MutableList<org.oxff.helloxiaozhi.data.StoredMessage> = mutableListOf()
 
     init {
         msgList.layoutManager = LinearLayoutManager(container.context)
@@ -67,13 +70,20 @@ class ChatDetailController(
         repository.clearUnread(botId)
         botName.text = bot.name
         updateStatus(bot)
-        adapter.submit(repository.messages(botId))
+        cachedMessages = repository.messages(botId).toMutableList()
+        adapter.submit(cachedMessages)
         scrollBottom()
         container.open()
+        
+        // 打开聊天详情时确保连接已建立（修复：进入详情页时连接可能已断开）
+        if (controller.connectionStatus != ConnectionStatus.CONNECTED) {
+            controller.ensureConnected()
+        }
     }
 
     fun close() {
         openBotId = null
+        cachedMessages.clear()
         repository.visibleBotId = null
         container.close()
     }
@@ -87,10 +97,21 @@ class ChatDetailController(
     /** 新消息到达：只展示当前打开的机器人，其余由未读徽标体现 */
     fun onChatMessage(botId: String, message: org.oxff.helloxiaozhi.chat.ChatMessage) {
         if (botId != openBotId) return
-        repository.messages(botId).lastOrNull()?.let {
-            adapter.add(it)
-            scrollBottom()
+        // 从缓存中取最后一条消息，避免每次从 repository 全量查询
+        val lastMsg = cachedMessages.lastOrNull()
+        if (lastMsg != null && lastMsg.content == message.content && lastMsg.role == message.role) {
+            // 重复消息（乐观更新已添加），跳过
+            return
         }
+        // 添加新消息到缓存和适配器
+        val stored = org.oxff.helloxiaozhi.data.StoredMessage(
+            role = message.role,
+            content = message.content,
+            ts = System.currentTimeMillis()
+        )
+        cachedMessages.add(stored)
+        adapter.add(stored)
+        scrollBottom()
     }
 
     private fun updateStatus(bot: Bot, status: ConnectionStatus = controller.connectionStatus) {

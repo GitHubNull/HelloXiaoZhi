@@ -25,6 +25,9 @@ import java.io.File
  */
 open class MusicPlayer(private val context: Context) {
 
+    /** 音乐库引用（用于自动填充播放列表） */
+    var musicLibrary: MusicLibrary? = null
+
     /** 当前播放曲目变更回调 */
     var onTrackChanged: ((MusicTrack?) -> Unit)? = null
 
@@ -45,6 +48,13 @@ open class MusicPlayer(private val context: Context) {
     private var playlist: List<MusicTrack> = emptyList()
     private var currentIndex: Int = -1
 
+    /**
+     * 播放代际计数器：每次 startPlayback 自增，用于让旧 MediaPlayer 实例的
+     * 异步回调（prepareAsync/onCompletion/onError）在实例已被替换时失效，
+     * 防止多实例并发导致音频混音。
+     */
+    private var playbackGeneration = 0
+
     /** 当前播放状态 */
     @Volatile
     var state: PlaybackState = PlaybackState.IDLE
@@ -61,14 +71,33 @@ open class MusicPlayer(private val context: Context) {
 
     /**
      * 播放指定曲目
+     *
+     * 若当前播放列表已包含该曲目，则保留列表并跳转到该曲目；
+     * 否则以该曲目为起点，从库中随机补充后续曲目作为新播放列表。
      */
     open fun play(track: MusicTrack) {
         Log.i(TAG, "play: ${track.title} - ${track.artist}")
         stopInternal()
-        currentTrack = track
-        playlist = listOf(track)
+        
+        // 若当前播放列表已包含该曲目，则保留列表并跳转
+        val existingIndex = playlist.indexOfFirst { it.id == track.id }
+        if (existingIndex >= 0) {
+            currentIndex = existingIndex
+            currentTrack = playlist[currentIndex]
+            startPlayback(currentTrack!!)
+            return
+        }
+        
+        // 否则以该曲目为起点，从库中随机补充后续曲目
+        val newPlaylist = mutableListOf(track)
+        val libraryTracks = musicLibrary?.allTracks() ?: emptyList()
+        val otherTracks = libraryTracks.filter { it.id != track.id }.shuffled()
+        newPlaylist.addAll(otherTracks.take(PLAYLIST_AUTO_FILL_SIZE - 1))
+        
+        playlist = newPlaylist
         currentIndex = 0
-        startPlayback(track)
+        currentTrack = playlist[currentIndex]
+        startPlayback(currentTrack!!)
     }
 
     /**
@@ -127,6 +156,8 @@ open class MusicPlayer(private val context: Context) {
      */
     open fun next(): Boolean {
         if (playlist.isEmpty()) return false
+        // 必须先释放旧实例，避免 prepareAsync 回调与新实例并发导致多实例混音
+        stopInternal()
         val nextIndex = (currentIndex + 1) % playlist.size
         Log.i(TAG, "next: $currentIndex -> $nextIndex")
         currentIndex = nextIndex
@@ -140,6 +171,8 @@ open class MusicPlayer(private val context: Context) {
      */
     open fun previous(): Boolean {
         if (playlist.isEmpty()) return false
+        // 必须先释放旧实例，避免 prepareAsync 回调与新实例并发导致多实例混音
+        stopInternal()
         val prevIndex = if (currentIndex > 0) currentIndex - 1 else playlist.size - 1
         Log.i(TAG, "previous: $currentIndex -> $prevIndex")
         currentIndex = prevIndex
@@ -158,7 +191,7 @@ open class MusicPlayer(private val context: Context) {
     /**
      * 获取当前曲目
      */
-    fun getCurrentTrack(): MusicTrack? = currentTrack
+    open fun getCurrentTrack(): MusicTrack? = currentTrack
 
     /**
      * 获取当前播放列表
@@ -178,6 +211,9 @@ open class MusicPlayer(private val context: Context) {
             onError?.invoke("无法获取音频焦点")
             return
         }
+
+        // 代际标记：让旧实例的异步回调失效
+        val generation = ++playbackGeneration
 
         try {
             val mp = MediaPlayer()
@@ -203,6 +239,11 @@ open class MusicPlayer(private val context: Context) {
 
             // 准备完成回调
             mp.setOnPreparedListener { player ->
+                if (generation != playbackGeneration) {
+                    Log.i(TAG, "Prepared callback from stale generation $generation, releasing")
+                    player.release()
+                    return@setOnPreparedListener
+                }
                 Log.i(TAG, "MediaPlayer prepared, starting playback")
                 player.start()
                 setState(PlaybackState.PLAYING)
@@ -212,6 +253,10 @@ open class MusicPlayer(private val context: Context) {
 
             // 播放完成回调
             mp.setOnCompletionListener {
+                if (generation != playbackGeneration) {
+                    Log.i(TAG, "Completion callback from stale generation $generation, ignoring")
+                    return@setOnCompletionListener
+                }
                 Log.i(TAG, "Playback completed")
                 // 自动播放下一首
                 if (playlist.size > 1) {
@@ -224,6 +269,10 @@ open class MusicPlayer(private val context: Context) {
 
             // 错误回调
             mp.setOnErrorListener { _, what, extra ->
+                if (generation != playbackGeneration) {
+                    Log.i(TAG, "Error callback from stale generation $generation, ignoring")
+                    return@setOnErrorListener true
+                }
                 Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
                 onError?.invoke("播放错误: $what")
                 setState(PlaybackState.ERROR)
@@ -347,6 +396,9 @@ open class MusicPlayer(private val context: Context) {
 
     companion object {
         private const val TAG = "MusicPlayer"
+        
+        /** 播放列表自动填充大小：播放单曲时从库中随机补充的曲目数量 */
+        private const val PLAYLIST_AUTO_FILL_SIZE = 20
     }
 }
 
