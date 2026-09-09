@@ -338,6 +338,27 @@ class RobotActionRegistryTest {
     }
 
     @Test
+    fun `MCP track 参数为整句口语时归一化后命中`() {
+        // 真机回归（2026-09-09 logcat）：服务器 AI 调 self.music.play 时把用户口语
+        // 整句塞进 track 参数，旧实现直接 library.search(脏长串) 必然失配
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        val result = registry.execute(
+            "self.music.play",
+            mapOf("track" to "你先帮我播放音乐吧，那个那个周杰伦的音乐。"),
+        )
+        assertNotNull(result)
+        assertTrue(musicPlayer.playCalled)
+    }
+
+    @Test
+    fun `MCP track 参数含填充词与语气词时归一化后命中`() {
+        val (registry, _, musicPlayer) = newRegistryWithMusic()
+        val result = registry.execute("self.music.play", mapOf("track" to "就是那个晴天吧"))
+        assertNotNull(result)
+        assertTrue(musicPlayer.playCalled)
+    }
+
+    @Test
     fun `播放无匹配返回 null`() {
         val (registry, _, musicPlayer) = newRegistryWithMusic()
         assertNull(registry.execute("self.music.play", mapOf("track" to "不存在的歌")))

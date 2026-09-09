@@ -82,7 +82,15 @@ class XiaoZhiController(
 
             override fun onEvent(event: ChatEvent) {
                 when (event) {
-                    ChatEvent.USER_START_SPEAKING -> audioPipeline.pausePlayback()
+                    ChatEvent.USER_START_SPEAKING -> {
+                        // 用户开口（两条路径：服务器端 VAD 下发 stt，或客户端
+                        // 本地电平检测到打断）：清空 TTS 队列、复位 AI 播放标记、
+                        // 清除残留结束语标志（打断后 onQueueEmpty 不再触发，
+                        // 不清除会在后续任意一次队列播空时误触发自动挂断）
+                        audioPipeline.pausePlayback()
+                        audioPipeline.clearAiPlaying()
+                        messageDispatcher.clearPendingFarewell()
+                    }
                     ChatEvent.AI_START_SPEAKING -> audioPipeline.resumePlayback()
                     ChatEvent.AI_STOP_SPEAKING -> {
                         if (config.aiDoneSoundEnabled) {
@@ -151,6 +159,10 @@ class XiaoZhiController(
             // 标记本地音乐播放中，AudioPipeline 将丢弃服务器下发的 TTS 音频帧，
             // 避免服务器 AI 抢播它平台的歌与本地音乐混音
             audioPipeline.isLocalMusicPlaying = true
+            // 必须让状态机脱离 AI_SPEAKING：MediaPlayer 的音乐声不在 AEC 参考
+            // 信号内，会被麦克风完整录入而持续误触发本地打断检测；回到 IDLE
+            // 后才能持续上行音频，让服务器端 VAD 识别唤醒词打断指令
+            audioPipeline.enterLocalMusicMode()
             if (audioPipeline.inVoiceCall) {
                 audioPipeline.pausePlayback()
             }
@@ -246,11 +258,34 @@ class XiaoZhiController(
             ws.sendText(responseJson)
         }
         // 本地音乐指令匹配成功：发送 AbortMessage 打断服务器 TTS，
-        // 防止服务器 AI 播放自己平台的音乐与本地音乐冲突
+        // 防止服务器 AI 播放自己平台的音乐与本地音乐冲突；
+        // 同时开启回复抑制窗口——停止类指令会让 isLocalMusicPlaying 立即复位，
+        // 那道 TTS 门控跟着失效，abort 在途的 llm/tts 仍会被播出来
         messageDispatcher.onLocalMusicHandled = {
-            Log.i(TAG, "[WS] local music handled, send abort to stop server TTS")
+            Log.i(TAG, "[WS] local music handled, send abort and suppress server reply")
             ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
+            audioPipeline.suppressServerReply()
         }
+        // Barge-in：AI 说话期间用户开口，发 Abort 打断服务器 TTS 并本地暂停播放
+        messageDispatcher.onBargeIn = {
+            Log.i(TAG, "[WS] barge-in: send abort and pause playback")
+            ws.sendText(AbortMessage(sessionId = connectionManager.sessionId))
+            audioPipeline.pausePlayback()
+        }
+        // 唤醒词打断本地音乐：停止音乐（onMusicStop 回调会自动复位
+        // isLocalMusicPlaying 并 resumePlayback，恢复语音通话流程）
+        messageDispatcher.onWakeWordInterrupt = {
+            Log.i(TAG, "[WS] wake word interrupt: stop local music")
+            if (musicPlayer.state != org.oxff.helloxiaozhi.music.PlaybackState.IDLE) {
+                musicPlayer.stop()
+            }
+        }
+        // 注入本地音乐播放状态提供者（避免 MessageDispatcher 反向依赖 AudioPipeline）
+        messageDispatcher.isLocalMusicPlayingProvider = { audioPipeline.isLocalMusicPlaying }
+        // 注入服务器回复抑制状态：抑制窗口内 MessageDispatcher 丢弃 llm/tts 文本，
+        // 避免音乐控制指令（"别唱了"）引出的 AI 回复落库到聊天记录
+        messageDispatcher.isReplySuppressedProvider = { audioPipeline.isServerReplySuppressed() }
+        messageDispatcher.onClearReplySuppress = { audioPipeline.clearServerReplySuppress() }
         messageDispatcher.onHelloReceived = { sessionId, sampleRate ->
             connectionManager.onHelloReceived(sessionId)
             audioPipeline.onHelloReceived(sampleRate)

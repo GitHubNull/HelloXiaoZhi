@@ -147,6 +147,47 @@ class MusicActionMapperTest {
     }
 
     @Test
+    fun `口语长句点歌命中被填充词包裹的歌手`() {
+        // 真机回归（2026-09-09 logcat）：用户说 "你先帮我播放音乐吧，那个那个韩宝仪的音乐。"
+        // 旧单串清洗提取出 "音乐吧，那个那个韩宝" → No tracks found，本地音乐从未播放，
+        // 服务器 AI 转而用 TTS 唱自编歌顶替
+        musicLibrary.tracks = listOf(
+            MusicTrack(
+                id = "1", title = "想要潇洒的离开", artist = "韩宝仪", album = null,
+                duration = 200000, path = "/music/xiaosa.mp3", source = MusicSource.LOCAL,
+            ),
+        )
+        assertTrue(mapper.processText("你先帮我播放音乐吧，那个那个韩宝仪的音乐。"))
+        assertEquals("韩宝仪", musicPlayer.lastPlayedTrack?.artist)
+    }
+
+    @Test
+    fun `口语长句点歌命中被填充词包裹的曲名`() {
+        musicLibrary.tracks = listOf(
+            MusicTrack(
+                id = "1", title = "晴天", artist = "周杰伦", album = "范特西",
+                duration = 200000, path = "/music/sunny.mp3", source = MusicSource.LOCAL,
+            ),
+        )
+        assertTrue(mapper.processText("就是那个，帮我放一下晴天吧"))
+        assertEquals("晴天", musicPlayer.lastPlayedTrack?.title)
+    }
+
+    @Test
+    fun `纯泛化播放指令降级为随机播放`() {
+        // "播放音乐" 归一化后无有效候选（"音乐" 属泛化词），
+        // 用户意图就是随便放点音乐，不得直接返回 false
+        musicLibrary.tracks = listOf(
+            MusicTrack(
+                id = "1", title = "晴天", artist = "周杰伦", album = "范特西",
+                duration = 200000, path = "/music/sunny.mp3", source = MusicSource.LOCAL,
+            ),
+        )
+        assertTrue(mapper.processText("播放音乐"))
+        assertEquals("晴天", musicPlayer.lastPlayedTrack?.title)
+    }
+
+    @Test
     fun `播放指定歌手带音乐后缀`() {
         musicLibrary.tracks = listOf(
             MusicTrack(
@@ -229,6 +270,54 @@ class MusicActionMapperTest {
     fun `停止播放`() {
         assertTrue(mapper.processText("停止播放"))
         assertTrue(musicPlayer.stopCalled)
+    }
+
+    @Test
+    fun `口语停止说法被识别`() {
+        // 真机回归（2026-09-09）：用户说 "别唱了" 时旧词表未命中，
+        // 导致不发 abort 且落库为聊天消息，服务器 AI 接着这句话闲聊
+        assertTrue(mapper.processText("别唱了"))
+        assertTrue(musicPlayer.stopCalled)
+    }
+
+    @Test
+    fun `多种口语停止与切歌说法被识别`() {
+        assertTrue(mapper.isControlCommand("别唱"))
+        assertTrue(mapper.isControlCommand("不听了"))
+        assertTrue(mapper.isControlCommand("安静点"))
+        assertTrue(mapper.isControlCommand("关掉"))
+        assertTrue(mapper.isControlCommand("下一曲"))
+        assertTrue(mapper.isControlCommand("停一会"))
+        assertTrue(mapper.isControlCommand("接着唱"))
+    }
+
+    @Test
+    fun `isControlCommand 区分控制类与播放类指令`() {
+        assertTrue(mapper.isControlCommand("别唱了"))
+        assertTrue(mapper.isControlCommand("停止播放"))
+        assertTrue(mapper.isControlCommand("下一首"))
+        assertTrue(mapper.isControlCommand("暂停一下"))
+        assertTrue(mapper.isControlCommand("继续播放"))
+        assertFalse(mapper.isControlCommand("播放韩宝仪的歌"))
+        assertFalse(mapper.isControlCommand("今天天气怎么样"))
+    }
+
+    @Test
+    fun `isPlayRequest 区分播放类与控制类指令`() {
+        assertTrue(mapper.isPlayRequest("播放韩宝仪的歌"))
+        assertTrue(mapper.isPlayRequest("来点轻音乐"))
+        assertTrue(mapper.isPlayRequest("随机播放"))
+        assertTrue(mapper.isPlayRequest("播放范特西的专辑"))
+        assertFalse(mapper.isPlayRequest("别唱了"))
+        assertFalse(mapper.isPlayRequest("今天天气怎么样"))
+    }
+
+    @Test
+    fun `日常聊天中的控制类词不得被误判为播放指令`() {
+        // "别说话" 属控制类（仅音乐播放中才拦截），但绝不属播放类；
+        // 若误判为播放类会在任何场景下吞掉用户对话
+        assertTrue(mapper.isControlCommand("你先别说话，我说完再说"))
+        assertFalse(mapper.isPlayRequest("你先别说话，我说完再说"))
     }
 
     @Test

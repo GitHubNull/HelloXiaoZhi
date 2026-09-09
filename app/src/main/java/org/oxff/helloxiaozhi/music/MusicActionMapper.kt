@@ -9,7 +9,8 @@ import android.util.Log
  * 当服务器不支持 MCP 或 MCP 消息未到达时，仍可通过关键词匹配控制音乐播放。
  *
  * 匹配规则（按优先级排序）：
- *  - "播放/放一首/来一首/来点" + 曲名/歌手 → 搜索并播放
+ *  - "播放/放一首/来一首/来点" + 曲名/歌手 → 归一化成候选关键词后反查曲库并播放
+ *    （口语长句由 [MusicKeywordNormalizer] 处理；无具体目标时降级随机播放）
  *  - "播放/来点" + 类型（轻音乐/摇滚/流行/古典/爵士） → 按类型随机播放
  *  - "随机播放/随便放一首" → 随机播放
  *  - "暂停/暂停播放" → 暂停
@@ -124,21 +125,42 @@ class MusicActionMapper(
                 }
             }
 
-            // 播放指定曲目/歌手
+            // 播放指定曲目/歌手：归一化成多个候选关键词后逐个反查曲库，
+            // 命中即播。口语长句里目标词常被泛化词/填充词/装饰词包裹
+            // （实测 "你先帮我播放音乐吧，那个那个韩宝仪的音乐。"），
+            // 单串清洗必失配，须由曲库内容裁决哪个候选才是真目标
             containsAny(lowerText, PLAY_KEYWORDS) -> {
-                val keyword = extractPlayKeyword(text)
-                if (keyword != null) {
-                    Log.i(TAG, "Action: play track=$keyword")
-                    val tracks = musicLibrary.search(keyword)
-                    if (tracks.isNotEmpty()) {
-                        musicPlayer.play(tracks.first())
+                val candidates = MusicKeywordNormalizer.candidates(text)
+                Log.i(TAG, "Play candidates: $candidates")
+                val matched = candidates.asSequence()
+                    .map { it to musicLibrary.search(it) }
+                    .firstOrNull { it.second.isNotEmpty() }
+                when {
+                    matched != null -> {
+                        val track = matched.second.first()
+                        Log.i(TAG, "Action: play keyword=${matched.first} track=${track.title}")
+                        musicPlayer.play(track)
                         true
-                    } else {
-                        Log.w(TAG, "No tracks found for keyword: $keyword")
+                    }
+
+                    // 纯泛化指令（"播放音乐"/"放首歌"）归一化后无候选，
+                    // 用户意图就是"随便放点音乐"，降级为随机播放
+                    candidates.isEmpty() -> {
+                        val track = musicLibrary.randomTrack()
+                        if (track != null) {
+                            Log.i(TAG, "Action: play random (generic request)")
+                            musicPlayer.play(track)
+                            true
+                        } else {
+                            Log.w(TAG, "No tracks in library for generic play request")
+                            false
+                        }
+                    }
+
+                    else -> {
+                        Log.w(TAG, "No tracks found for candidates: $candidates")
                         false
                     }
-                } else {
-                    false
                 }
             }
 
@@ -147,91 +169,33 @@ class MusicActionMapper(
     }
 
     /**
-     * 提取播放关键词（去除播放指令前缀与后缀装饰词）。
+     * 判定文本是否为「播放控制类」指令（停止/暂停/继续/上一首/下一首）。
      *
-     * 例：
-     *  - "播放韩宝仪的歌曲" → "韩宝仪"
-     *  - "播放韩宝仪的歌"   → "韩宝仪"
-     *  - "来一首晴天"       → "晴天"
+     * 只判定不执行，供调用方按场景决定是否拦截。必须在本地音乐播放期间
+     * 才拦截这类词：无音乐时 "别唱了"/"停下"/"你别说话" 很可能是正常聊天
+     * 内容，拦截会吞掉用户对话并误发 abort 打断服务器回复。
      */
-    private fun extractPlayKeyword(text: String): String? {
-        for (prefix in PLAY_PREFIXES) {
-            if (text.startsWith(prefix)) {
-                val keyword = text.removePrefix(prefix).trim()
-                val cleaned = stripDecorations(keyword)
-                if (cleaned.isNotEmpty()) {
-                    return cleaned
-                }
-                if (keyword.isNotEmpty()) {
-                    return keyword
-                }
-            }
-        }
-        // 如果没有前缀，检查是否包含"播放"等关键词
-        for (keyword in PLAY_KEYWORDS) {
-            if (text.contains(keyword)) {
-                // 提取"播放"后面的内容
-                val index = text.indexOf(keyword)
-                val after = text.substring(index + keyword.length).trim()
-                val cleaned = stripDecorations(after)
-                if (cleaned.isNotEmpty()) {
-                    return cleaned
-                }
-                if (after.isNotEmpty()) {
-                    return after
-                }
-            }
-        }
-        return null
+    fun isControlCommand(text: String): Boolean {
+        val lower = text.lowercase()
+        return containsAny(lower, STOP_KEYWORDS) ||
+            containsAny(lower, PAUSE_KEYWORDS) ||
+            containsAny(lower, RESUME_KEYWORDS) ||
+            containsAny(lower, NEXT_KEYWORDS) ||
+            containsAny(lower, PREVIOUS_KEYWORDS)
     }
 
     /**
-     * 去除关键词首尾的装饰词（"的歌曲"/"的歌"/"歌曲"/"首歌" 等）与结尾标点，
-     * 避免把装饰词带进搜索导致匹配失败（如 "韩宝仪的歌曲。" 搜不到 artist=韩宝仪）。
+     * 判定文本是否为「播放类」指令（点歌/随机/按类型/按专辑）。
      *
-     * 说明：STT 识别文本末尾常带中文句号/感叹号/问号等标点，若先去标点再去装饰词，
-     * 否则 endsWith("的歌曲") 会因结尾是 "。" 而匹配失败。循环剥离直到稳定。
+     * 只判定不执行。此类指令表达明确的听歌意图，与是否在播音乐无关，
+     * 任何场景下都应本地直接处理（比绕服务器 LLM + MCP 往返快很多）。
      */
-    private fun stripDecorations(keyword: String): String {
-        var result = keyword.trim()
-        while (true) {
-            val before = result
-            // 先剥离开头量词（"一首"/"这首歌"/"那首歌" 等），避免 "播放一首韩宝仪的歌曲" 提取成 "一首韩宝仪"
-            result = stripLeadingQuantifier(result)
-            // 先剥离结尾标点（STT 常带中文标点）
-            result = result.trimEnd(*TRAILING_PUNCTUATION)
-            // 再剥离装饰词后缀（长的在前，优先匹配，避免 "的歌曲" 被 "的歌" 截断成 "曲"）
-            for (suffix in DECORATION_SUFFIXES) {
-                if (result.endsWith(suffix) && result.length > suffix.length) {
-                    result = result.removeSuffix(suffix).trim()
-                    break
-                }
-            }
-            if (result == before) break
-        }
-        return result
-    }
-
-    /**
-     * 剥离开头的量词/指代词前缀（长词优先，循环剥离直到稳定）。
-     *
-     * 例：
-     *  - "一首韩宝仪的歌曲" → "韩宝仪的歌曲"（再经过 [stripDecorations] 剥尾部装饰词后得 "韩宝仪"）
-     *  - "这首歌晴天"       → "晴天"
-     */
-    private fun stripLeadingQuantifier(keyword: String): String {
-        var result = keyword.trim()
-        while (true) {
-            val before = result
-            for (q in LEADING_QUANTIFIERS) {
-                if (result.startsWith(q) && result.length > q.length) {
-                    result = result.removePrefix(q).trim()
-                    break
-                }
-            }
-            if (result == before) break
-        }
-        return result
+    fun isPlayRequest(text: String): Boolean {
+        val lower = text.lowercase()
+        return containsAny(lower, RANDOM_KEYWORDS) ||
+            containsAny(lower, GENRE_KEYWORDS) ||
+            containsAny(lower, ALBUM_KEYWORDS) ||
+            containsAny(lower, PLAY_KEYWORDS)
     }
 
     /**
@@ -278,39 +242,38 @@ class MusicActionMapper(
     companion object {
         private const val TAG = "MusicActionMapper"
 
-        // 播放指令关键词
-        private val PLAY_KEYWORDS = arrayOf("播放", "放一首", "来一首", "来点", "放歌", "听歌")
+        // 播放指令关键词（作为 PLAY 分支门控；须覆盖口语中"放一下/放个/听一下"
+        // 等说法，缺一项就会让整句落到 else 分支而不触发任何播放）
+        private val PLAY_KEYWORDS = arrayOf(
+            "播放", "放一首", "放一下", "放首歌", "放个", "放首", "放歌",
+            "来一首", "来一曲", "来点", "听歌", "听一下", "听一首",
+            "点一首", "点歌", "唱一首",
+        )
         private val PLAY_PREFIXES = arrayOf("播放", "放一首", "来一首", "来点", "放歌")
 
-        // 控制指令关键词
-        private val PAUSE_KEYWORDS = arrayOf("暂停", "暂停播放", "暂停音乐", "停一下")
-        private val RESUME_KEYWORDS = arrayOf("继续播放", "接着放", "继续", "恢复播放")
-        private val STOP_KEYWORDS = arrayOf("停止", "停止播放", "别放了", "关掉音乐", "关闭音乐")
-        private val NEXT_KEYWORDS = arrayOf("下一首", "切歌", "换一首", "下一个", "下首")
-        private val PREVIOUS_KEYWORDS = arrayOf("上一首", "上一曲", "前一个", "上首")
+        // 控制指令关键词（含大量口语说法：真机实测用户说 "别唱了" 时，
+        // 旧词表未命中 → 不发 abort 且落库为聊天消息，服务器 AI 接着这句话闲聊）
+        private val PAUSE_KEYWORDS = arrayOf(
+            "暂停播放", "暂停音乐", "暂停一下", "暂停", "停一下", "停一会", "先停",
+        )
+        private val RESUME_KEYWORDS = arrayOf(
+            "继续播放", "继续放", "接着放", "接着唱", "恢复播放", "继续", "恢复",
+        )
+        private val STOP_KEYWORDS = arrayOf(
+            "停止播放", "停止", "停掉", "停下", "别放了", "别唱了", "别唱", "别念了",
+            "不听了", "不放了", "关掉音乐", "关闭音乐", "关掉", "别说话", "安静点",
+            "安静", "闭嘴", "stop",
+        )
+        private val NEXT_KEYWORDS = arrayOf(
+            "下一首", "下一曲", "下首", "下一个", "切歌", "换一首", "换首歌", "换一个",
+        )
+        private val PREVIOUS_KEYWORDS = arrayOf(
+            "上一首", "上一曲", "上首", "前一个", "回到上一首",
+        )
         private val RANDOM_KEYWORDS = arrayOf("随机播放", "随便放一首", "随机来一首", "随便播放")
 
         // 专辑指令关键词
         private val ALBUM_KEYWORDS = arrayOf("的专辑", "专辑")
-
-        // 播放关键词后缀装饰词（长的在前，优先匹配，避免截断错误）
-        private val DECORATION_SUFFIXES = arrayOf(
-            "的歌曲", "的音乐", "这首歌", "的歌儿", "的歌", "首歌", "歌曲", "音乐", "曲目", "这首",
-        )
-
-        // 开头的量词/指代词前缀（长词在前，优先匹配；STT 识别指令文本时常见，须在结尾装饰词前剔除，避免搜错）
-        private val LEADING_QUANTIFIERS = arrayOf(
-            "这一首", "那一首", "这首歌", "那首歌", "随便一首",
-            "一首歌", "来一首", "放一首", "点一首",
-            "一首", "那首", "这首", "几首",
-        )
-
-        // 结尾标点（STT 识别文本常带中文/英文句末标点，须在装饰词剥离前剔除）
-        private val TRAILING_PUNCTUATION = charArrayOf(
-            '。', '！', '？', '，', '、', '；', '：', '…',
-            '.', '!', '?', ',', ';', ':',
-            '”', '’', '"', '」', '』', '）', '）', '|', '~', '～',
-        )
 
         // 音乐类型关键词
         private val GENRE_KEYWORDS = arrayOf(

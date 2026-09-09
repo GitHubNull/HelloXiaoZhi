@@ -4,6 +4,25 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.16.1] - 2026-09-09
+
+### Added
+
+- 新增 `MusicKeywordNormalizer`：语音点歌口语长句归一化成候选关键词（每片段产出激进剥填充词与保守保留双变体，泛化词“音乐/歌曲”与纯填充词不入候选），`MusicActionMapper` 与 `self.music.play` 改为逐候选反查曲库，覆盖“音乐吧，那个那个韩宝仪的音乐。”类脏输入（真机实测长串直查必失配）
+- 扩充 `MusicActionMapper` 门控词表：播放（“放一下”）、停止（“别唱了/不听了/安静点”）、暂停/恢复/切歌等口语说法补全，避免漏词整句落到 `else` 分支
+- 新增单元测试 `MusicKeywordNormalizerTest`；扩充 `ChatStateMachineTest`（本地打断检测与 preRoll 补发）、`MessageDispatcherTest`（唤醒词门控/指令拦截/抑制窗口/STT 免疫期）、`MusicActionMapperTest`、`RobotActionRegistryTest`
+
+### Fixed
+
+- 修复 AI 播放期间用户打断（barge-in）死锁：此前 AI 播放时完全不上行，服务器端 VAD 收不到任何声音、永不下发 `stt`（真机实测 AI 连续输出两分钟零条 stt）。现 `ChatStateMachine` 在 `AI_SPEAKING` 期间每帧仍送状态机：压入 preRoll 环形缓冲 + 本地电平打断检测（`THRESHOLD_INTERRUPT=0.1` 连续 3 帧约 180ms 防抖，AEC 后 TTS 回声电平实测仅 0.011~0.06 不会误触发）；命中后按「AbortMessage → `AI_STOP_SPEAKING`（重发 listen start）→ `flushPreRoll` 补发句首帧 → `USER_START_SPEAKING`」时序打断；上行门控由 `isAiPlaying` 改为进通话后 `UPLINK_READY_DELAY_MS=1500ms` 就绪窗口（窗口内帧丢弃），状态机每帧仍可收到音频
+- 修复音乐播放中语音指令被服务器 AI 当聊天内容接续（“别唱了”后 AI 接着闲聊）：三层本地拦截——① 唤醒词前缀门控 `stripWakeWordPrefix`（非唤醒词开头直接忽略不落库不迁移状态）；② 指令先分类（`isControlCommand`/`isPlayRequest` 只判定不执行）再决定停不停音乐，命中 → `onLocalMusicHandled` 发 `AbortMessage` + 开 `SERVER_REPLY_SUPPRESS_MS=12000ms` 回复抑制窗口（窗口内丢弃在途 `llm`/`tts` 文本与音频帧，覆盖 abort 在途与同批语音 STT 尾巴开启的一轮完整回复）；③ STT 免疫期（`handleStt` 入口纳入 `isReplySuppressed()` 门控）丢弃音乐停止后无唤醒词的尾巴（真机实测“这。”）；用户以唤醒词开启新对话时主动清除抑制窗口
+- 修复本地音乐播放期间残留 `AI_SPEAKING` 被音乐声持续误触发打断：`MediaPlayer` 声音不在 AudioTrack AEC 参考信号内，`enterLocalMusicMode` 复位 `isAiPlaying` 并强制状态机回 `IDLE`，走 IDLE 分支持续上行供服务器 VAD 识别唤醒词
+- 修复打断后残留结束语标志在后续队列播空时误触发自动挂断：进入 `USER_SPEAKING` 时清除 `pendingFarewell`（打断清队列后 `onQueueEmpty` 不再触发，残留标志会残留到下次播空）
+
+### Changed
+
+- `MessageDispatcher`（下行文本分发/聊天落库/音乐指令拦截/唤醒词剥离）与 `AudioPipeline`（录音播放生命周期/Opus 编解码/上下行帧处理/播放门控）从 `XiaoZhiController` 拆出为独立类，职责分层与 AGENTS.md 模块表对齐
+
 ## [0.16.0] - 2026-09-09
 
 ### Added

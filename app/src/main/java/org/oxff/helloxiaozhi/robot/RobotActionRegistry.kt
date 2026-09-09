@@ -2,6 +2,7 @@ package org.oxff.helloxiaozhi.robot
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import org.oxff.helloxiaozhi.music.MusicKeywordNormalizer
 import org.oxff.helloxiaozhi.music.MusicLibrary
 import org.oxff.helloxiaozhi.music.MusicPlayer
 import org.oxff.helloxiaozhi.music.MusicTrack
@@ -427,8 +428,23 @@ class RobotActionRegistry(
                 val genre = params["genre"] as? String
                 val random = params["random"] as? Boolean ?: false
 
+                // 服务器 AI 常把整句口语直接塞进 track（真机实测
+                // track="音乐吧，那个那个韩宝仪的音乐。"），而曲库 search 是
+                // 「关键词须被标题/歌手包含」语义，脏长串必然失配。
+                // 归一化成多个候选后逐个反查，由曲库内容裁决真目标；
+                // 归一化不出候选时降级用原始参数，不回归原行为。
+                val trackCandidates = trackKeyword
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { raw ->
+                        MusicKeywordNormalizer.candidates(raw).ifEmpty { listOf(raw.trim()) }
+                    }
+                    .orEmpty()
+
                 val track = when {
-                    !trackKeyword.isNullOrEmpty() -> library.search(trackKeyword).firstOrNull()
+                    trackCandidates.isNotEmpty() -> trackCandidates.asSequence()
+                        .map { library.search(it) }
+                        .firstOrNull { it.isNotEmpty() }
+                        ?.firstOrNull()
                     !albumKeyword.isNullOrEmpty() -> library.searchByAlbum(albumKeyword).randomOrNull()
                     !artistKeyword.isNullOrEmpty() -> library.tracksByArtist(artistKeyword).randomOrNull()
                     !genre.isNullOrEmpty() -> library.randomByGenre(genre)
@@ -440,7 +456,7 @@ class RobotActionRegistry(
                     player.play(track)
                     buildPlayingJson(track)
                 } else {
-                    logWarn("No track found for play: track=$trackKeyword, artist=$artistKeyword, album=$albumKeyword, genre=$genre, random=$random")
+                    logWarn("No track found for play: track=$trackKeyword, candidates=$trackCandidates, artist=$artistKeyword, album=$albumKeyword, genre=$genre, random=$random")
                     null
                 }
             },

@@ -11,8 +11,8 @@ android {
         applicationId = "org.oxff.helloxiaozhi"
         minSdk = 21
         targetSdk = 27
-        versionCode = 23
-        versionName = "0.16.0"
+        versionCode = 24
+        versionName = "0.16.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

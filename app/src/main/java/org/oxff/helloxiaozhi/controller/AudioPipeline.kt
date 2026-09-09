@@ -73,6 +73,39 @@ class AudioPipeline(
     @Volatile
     private var uplinkReadyAtMs = 0L
 
+    /**
+     * 服务器回复抑制截止时间戳（SystemClock.uptimeMillis）。
+     *
+     * 本地音乐控制指令（"别唱了"/"下一首"）执行后会发 AbortMessage 取消服务器
+     * 回复，但停止类指令随即使 [isLocalMusicPlaying] 复位为 false，那道 TTS 门控
+     * 跟着失效；abort 到达服务器前已在途的 llm/tts 仍会被播出来，形成
+     * "AI 接着控制指令闲聊" 的割裂体验（真机实测：说 "别唱了" 后 AI 围绕这句
+     * 聊了下去）。该窗口在指令处理后继续丢弃服务器文本与音频，直到用户
+     * 开始下一轮真实对话（[clearServerReplySuppress]）或窗口超时自然失效。
+     */
+    @Volatile
+    private var suppressReplyUntilMs = 0L
+
+    /**
+     * 开启服务器回复抑制窗口（本地音乐控制指令已处理后调用）。
+     */
+    fun suppressServerReply(windowMs: Long = SERVER_REPLY_SUPPRESS_MS) {
+        suppressReplyUntilMs = android.os.SystemClock.uptimeMillis() + windowMs
+        Log.i(TAG, "server reply suppressed for ${windowMs}ms")
+    }
+
+    /** 清除服务器回复抑制（用户开始新一轮真实对话时调用） */
+    fun clearServerReplySuppress() {
+        if (suppressReplyUntilMs != 0L) {
+            suppressReplyUntilMs = 0L
+            Log.i(TAG, "server reply suppress cleared")
+        }
+    }
+
+    /** 当前是否处于服务器回复抑制窗口内 */
+    fun isServerReplySuppressed(): Boolean =
+        android.os.SystemClock.uptimeMillis() < suppressReplyUntilMs
+
     private var recorder: AudioRecorderManager? = null
     private var opusEncoder: OpusCodec? = null
     private var opusDecoder: OpusCodec? = null
@@ -116,8 +149,15 @@ class AudioPipeline(
         val encoder = opusEncoder ?: OpusCodec.encoder().also { opusEncoder = it }
         recorder = AudioRecorderManager(
             onFrame = { frame, level ->
-                // AI 播放时完全不上行；上行就绪窗口期内也不上行（但电平仍驱动 UI）
-                if (!isAiPlaying && android.os.SystemClock.uptimeMillis() >= uplinkReadyAtMs) {
+                // 上行就绪窗口期内不处理（但电平仍驱动 UI）。
+                //
+                // 注意：此处**不能**用 isAiPlaying 门控。AI 播放期间若不把帧送给
+                // 状态机，则：① 状态机无法做本地打断检测；② 音频也不上行，
+                // 服务器端 VAD 收不到任何声音而永远不下发 stt，形成“等 stt
+                // 才能打断、但不打断就永远收不到 stt”的双重死锁。
+                // 是否上行由状态机内部按 state 决定（AI_SPEAKING 不上行，
+                // 避免 TTS 泄漏污染服务器端 VAD）。
+                if (android.os.SystemClock.uptimeMillis() >= uplinkReadyAtMs) {
                     stateMachine.handleAudioLevel(level, frame)
                 }
             },
@@ -138,6 +178,27 @@ class AudioPipeline(
         recorder = null
         player.pausePlayback()
         stateMachine.reset()
+    }
+
+    /**
+     * 本地音乐播放开始时强制状态机回到 IDLE。
+     *
+     * 两个必要原因：
+     *  1. MusicPlayer 用 MediaPlayer 播放，其声音**不在 AudioTrack 的 AEC 参考
+     *     信号内**，会被麦克风完整录入且电平远超打断阈值；若状态机停在
+     *     AI_SPEAKING，本地打断检测会被音乐声持续误触发。
+     *  2. 必须走 IDLE 分支持续上行音频，服务器端 VAD 才能识别用户的唤醒词
+     *     打断指令（音乐播放期间的打断依赖 STT 文本唤醒词前缀匹配）。
+     *
+     * 从 AI_SPEAKING 迁移会触发 AI_STOP_SPEAKING → XiaoZhiController 重发
+     * listen start，正好开启新一轮监听。
+     */
+    fun enterLocalMusicMode() {
+        isAiPlaying = false
+        if (stateMachine.state != ChatState.IDLE) {
+            Log.i(TAG, "local music start: force state ${stateMachine.state} -> IDLE")
+            stateMachine.setState(ChatState.IDLE)
+        }
     }
 
     /**
@@ -199,6 +260,11 @@ class AudioPipeline(
                 Log.i(TAG, "tts start dropped (local music playing)")
                 return@post
             }
+            // 本地音乐控制指令后的抑制窗口：丢弃 abort 在途的服务器回复
+            if (isServerReplySuppressed()) {
+                Log.i(TAG, "tts start dropped (server reply suppressed)")
+                return@post
+            }
             isAiPlaying = true
             if (stateMachine.state == ChatState.IDLE || stateMachine.state == ChatState.USER_SPEAKING) {
                 stateMachine.setState(ChatState.AI_SPEAKING)
@@ -232,6 +298,17 @@ class AudioPipeline(
      */
     fun pausePlayback() {
         player.pausePlayback()
+    }
+
+    /**
+     * 复位 AI 播放标记（用户打断 AI 时调用）。
+     *
+     * 打断后 TTS 队列已被 pausePlayback 清空，onQueueEmpty 不会再触发
+     * （pausePlayback 置 playing=false，播放循环走等待分支），因此必须显式
+     * 复位，否则 isAiPlaying 会持续为 true 让机器人表情映射等下游逻辑误判。
+     */
+    fun clearAiPlaying() {
+        isAiPlaying = false
     }
 
     /**
@@ -278,6 +355,11 @@ class AudioPipeline(
                 Log.i(TAG, "audio frame dropped (local music playing)")
                 return@postDelayed
             }
+            // 本地音乐控制指令后的抑制窗口：丢弃 abort 在途的 TTS 音频
+            if (isServerReplySuppressed()) {
+                Log.i(TAG, "audio frame dropped (server reply suppressed)")
+                return@postDelayed
+            }
             player.enqueue(pcm)
             onAiWaveLevel?.invoke(aiLevel)
             if (stateMachine.state == ChatState.IDLE) {
@@ -291,6 +373,23 @@ class AudioPipeline(
         const val DEFAULT_SAMPLE_RATE = 16000
         const val TTS_STOP_GRACE_MS = 200L
         const val TTS_PLAY_DELAY_MS = 300L
+
+        /**
+         * 本地音乐控制指令后的服务器回复抑制窗口（毫秒）。
+         *
+         * 本窗口需要覆盖两类场景：
+         *  1. abort 在途回复：服务器已开始生成、但被 AbortMessage 打断后仍会发完的小段
+         *     （如「好啦好啦，不唱了哟」）。仅需网络往返 200~400ms + 在途帧排空。
+         *  2. 同批语音的 STT 尾巴：主机 VAD 可能把一句「阿妹阿妹，别唱了」切出第二条
+         *     STT（真机实测「这。」），服务器会把这条尾巴当作**新的一轮输入**开启完整
+         *     回复，而非停止。此类回复通常持续 5~15s，太长会漏播后半句（真机实测底部
+         *     「你其实想让我放点别的歌？」仍被播出）。
+         *
+         * 取值须覆盖第 2 类的最长一轮回复。过长仅对「窗口内不带唤醒词的对话」有影响
+         * （会被忽略）；而用户真实新对话通常以唤醒词开头，走 handleSttText 主动清除
+         * 抑制，不受窗口限制。
+         */
+        const val SERVER_REPLY_SUPPRESS_MS = 12000L
 
         /**
          * 进入通话后的上行就绪延迟（毫秒）：给 listen start 留出到达服务器并激活
